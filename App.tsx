@@ -189,13 +189,6 @@ const App: React.FC = () => {
     });
   }, []);
 
-  const handleUpdateBio = (artistId: string, bio: string) => {
-    setArtistsInMarket(prev => prev.map(a => a.id === artistId ? { ...a, bio } : a));
-    if (viewingArtist?.id === artistId) {
-        setViewingArtist(prev => prev ? { ...prev, bio } : null);
-    }
-  }
-
   const handleNavigate = (page: Page) => {
       setViewingArtist(null);
       setCurrentPage(page);
@@ -212,7 +205,6 @@ const App: React.FC = () => {
         investments={investments}
         onBack={() => setViewingArtist(null)}
         onInvest={() => setInvestModalArtist(viewingArtist)}
-        onUpdateBio={handleUpdateBio}
       />;
     }
 

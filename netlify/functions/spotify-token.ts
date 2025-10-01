@@ -16,7 +16,8 @@ const handler: Handler = async (event, context) => {
     };
   }
 
-  const authString = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  // Fix: Replaced Node.js-specific `Buffer` with `btoa` for Base64 encoding to resolve TypeScript type errors.
+  const authString = btoa(`${clientId}:${clientSecret}`);
 
   try {
     // We need to use a dynamic import for node-fetch because this is a modern JS module

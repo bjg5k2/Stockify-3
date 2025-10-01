@@ -1,38 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Artist, Investment } from '../types';
 import { TrendUpIcon, TrendDownIcon } from './icons';
 import Chart from './Chart';
-import { getArtistBio } from '../services/geminiService';
 
 interface ArtistDetailPageProps {
   artist: Artist;
   investments: Investment[];
   onBack: () => void;
   onInvest: (artist: Artist) => void;
-  onUpdateBio: (artistId: string, bio: string) => void;
 }
 
-const ArtistDetailPage: React.FC<ArtistDetailPageProps> = ({ artist, investments, onBack, onInvest, onUpdateBio }) => {
+const ArtistDetailPage: React.FC<ArtistDetailPageProps> = ({ artist, investments, onBack, onInvest }) => {
     const history = artist.followerHistory;
     const followerChange = history.length > 1 ? history[history.length - 1].count - history[0].count : 0;
     const isGrowth = followerChange >= 0;
 
     const artistInvestments = investments.filter(inv => inv.artistId === artist.id);
     const totalInvested = artistInvestments.reduce((sum, inv) => sum + inv.initialInvestment, 0);
-
-    // Fix: Add state and effect to fetch and display artist biography.
-    const [bio, setBio] = useState(artist.bio || 'Fetching bio...');
-
-    useEffect(() => {
-        if (!artist.bio && artist.name) {
-            getArtistBio(artist.name).then(fetchedBio => {
-                setBio(fetchedBio);
-                onUpdateBio(artist.id, fetchedBio);
-            });
-        } else if (artist.bio) {
-            setBio(artist.bio);
-        }
-    }, [artist.bio, artist.name, artist.id, onUpdateBio]);
 
     const StatCard: React.FC<{ label: string; value: string | number; }> = ({ label, value }) => (
         <div className="bg-gray-900/50 p-4 rounded-lg text-center shadow-md">
@@ -47,7 +31,7 @@ const ArtistDetailPage: React.FC<ArtistDetailPageProps> = ({ artist, investments
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-                Back to Portfolio
+                Back to Market
             </button>
 
             <div className="bg-gray-800/40 backdrop-blur-sm border border-gray-700/80 rounded-xl shadow-2xl overflow-hidden">
@@ -73,13 +57,6 @@ const ArtistDetailPage: React.FC<ArtistDetailPageProps> = ({ artist, investments
                         <div>
                             <h3 className="text-xl font-semibold text-gray-200 mb-2">Follower History</h3>
                             <Chart data={artist.followerHistory} />
-                        </div>
-
-                        <div>
-                            <h3 className="text-xl font-semibold text-gray-200 mb-2">Biography</h3>
-                            <p className="text-gray-300 bg-gray-900/50 p-4 rounded-lg text-sm leading-relaxed">
-                                {bio}
-                            </p>
                         </div>
                         
                         <button
