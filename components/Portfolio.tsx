@@ -15,20 +15,24 @@ interface PortfolioProps {
 
 type SortOption = 'newest' | 'oldest' | 'largest_investment' | 'highest_return' | 'lowest_return' | 'highest_value';
 
+const UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
 const Portfolio: React.FC<PortfolioProps> = ({ investments, artists, onOpenSellModal, netWorthHistory, onViewDetail, onUpdateArtists }) => {
   const [sortOption, setSortOption] = useState<SortOption>('newest');
   const [isUpdating, setIsUpdating] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
-    if (investments.length === 0) {
-      setIsUpdating(false);
-      return; // No artists to fetch for.
-    }
-  
-    let timeoutId: number;
-  
-    const fetchUpdatesAndReschedule = async () => {
+    const fetchUpdates = async () => {
+      if (investments.length === 0) {
+        return;
+      }
+
+      // Check if enough time has passed since the last update
+      if (lastUpdated && (new Date().getTime() - lastUpdated.getTime()) < UPDATE_INTERVAL_MS) {
+        return;
+      }
+
       setIsUpdating(true);
       const artistIdsInPortfolio = [...new Set(investments.map(inv => inv.artistId))];
       
@@ -43,44 +47,16 @@ const Portfolio: React.FC<PortfolioProps> = ({ investments, artists, onOpenSellM
         } finally {
           setIsUpdating(false);
           setLastUpdated(new Date());
-          scheduleNextUpdate(); // Reschedule after completion
         }
       } else {
         setIsUpdating(false);
-        scheduleNextUpdate(); // Still schedule next update
       }
     };
-  
-    const scheduleNextUpdate = () => {
-      const now = new Date();
-      // Target 12:00 PM Central Time (approximated as 17:00 UTC for CDT)
-      const nextUpdate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 17, 0, 0, 0));
-  
-      if (now.getTime() > nextUpdate.getTime()) {
-        // If noon has passed today, schedule for tomorrow
-        nextUpdate.setUTCDate(nextUpdate.getUTCDate() + 1);
-      }
-  
-      const delay = nextUpdate.getTime() - now.getTime();
-      timeoutId = window.setTimeout(fetchUpdatesAndReschedule, delay);
-    };
-  
-    // Check if an update is needed on component mount
-    const lastNoon = new Date();
-    lastNoon.setUTCHours(17, 0, 0, 0);
-    if (new Date().getTime() < lastNoon.getTime()) {
-      // If it's before noon today, the last relevant noon was yesterday
-      lastNoon.setUTCDate(lastNoon.getUTCDate() - 1);
-    }
-  
-    if (!lastUpdated || lastUpdated.getTime() < lastNoon.getTime()) {
-      fetchUpdatesAndReschedule();
-    } else {
-      scheduleNextUpdate();
-    }
-  
-    return () => clearTimeout(timeoutId);
-  }, [investments.length, onUpdateArtists, lastUpdated]);
+
+    fetchUpdates();
+    // This effect should run when the component mounts or when the list of investments changes.
+    // We intentionally don't include `lastUpdated` in the dependency array to avoid re-triggering.
+  }, [investments, onUpdateArtists]);
   
 
   const portfolioItemsWithStats = useMemo(() => {
@@ -148,7 +124,7 @@ const Portfolio: React.FC<PortfolioProps> = ({ investments, artists, onOpenSellM
                   <div className="text-right text-xs text-gray-400">
                       <span className={`font-semibold ${isUpdating ? 'text-yellow-400' : 'text-emerald-400'}`}>{isUpdating ? 'Syncing...' : 'Live'}</span>
                       <span className="block">
-                          {lastUpdated ? `Last: ${lastUpdated.toLocaleTimeString()}` : 'Scheduled...'}
+                          {lastUpdated ? `Last: ${lastUpdated.toLocaleTimeString()}` : 'Ready...'}
                       </span>
                   </div>
                   <select

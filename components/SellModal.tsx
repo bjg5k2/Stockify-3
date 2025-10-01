@@ -6,42 +6,12 @@ interface SellModalProps {
   investment: Investment;
   artist: Artist;
   currentValue: number;
-  userCredits: number;
-  onSell: (investment: Investment, amount: number) => void;
+  onSell: (investment: Investment, currentValue: number) => void;
   onClose: () => void;
 }
 
-const SellModal: React.FC<SellModalProps> = ({ investment, artist, currentValue, userCredits, onSell, onClose }) => {
-  const [sellAmount, setSellAmount] = useState('');
-  const [error, setError] = useState('');
-
-  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (/^\d*\.?\d*$/.test(value)) { // Allow numbers and a single decimal point
-      setSellAmount(value);
-      setError('');
-    }
-  };
-
-  const handleSellClick = () => {
-    const amount = parseFloat(sellAmount);
-    if (isNaN(amount) || amount <= 0) {
-      setError('Please enter a valid amount to sell.');
-      return;
-    }
-    if (amount > currentValue) {
-      setError(`You can't sell more than the current value (C ${currentValue.toFixed(0)}).`);
-      return;
-    }
-    onSell(investment, amount);
-  };
-
-  const setSellPercentage = (percentage: number) => {
-    const value = currentValue * percentage;
-    setSellAmount(value.toFixed(2).replace(/\.00$/, '')); // Set amount and remove trailing .00
-    setError('');
-  }
-
+const SellModal: React.FC<SellModalProps> = ({ investment, artist, currentValue, onSell, onClose }) => {
+  
   const formatCredits = (amount: number) => {
     return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).replace('$', 'C ');
   }
@@ -61,34 +31,17 @@ const SellModal: React.FC<SellModalProps> = ({ investment, artist, currentValue,
         </div>
         
         <div className="bg-gray-900/50 p-3 rounded-lg mb-4 text-center">
-            <span className="text-sm text-gray-400 block">Current Investment Value</span>
+            <span className="text-sm text-gray-400 block">Sell for Current Value</span>
             <span className="text-2xl font-bold text-emerald-400">{formatCredits(currentValue)}</span>
         </div>
 
-        <div className="my-4">
-            <label htmlFor="sell-amount" className="block text-sm font-medium text-gray-300 mb-2">Sell Amount (in Credits)</label>
-            <input
-                type="text"
-                id="sell-amount"
-                value={sellAmount}
-                onChange={handleAmountChange}
-                className="w-full bg-gray-800/60 border-2 border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
-                placeholder={`e.g., ${Math.round(currentValue / 2)}`}
-            />
-            <div className="flex justify-between mt-2 space-x-2">
-                <button onClick={() => setSellPercentage(0.25)} className="flex-1 text-xs bg-gray-700/80 hover:bg-gray-700 text-white py-1.5 px-2 rounded-md transition-colors">25%</button>
-                <button onClick={() => setSellPercentage(0.50)} className="flex-1 text-xs bg-gray-700/80 hover:bg-gray-700 text-white py-1.5 px-2 rounded-md transition-colors">50%</button>
-                <button onClick={() => setSellPercentage(0.75)} className="flex-1 text-xs bg-gray-700/80 hover:bg-gray-700 text-white py-1.5 px-2 rounded-md transition-colors">75%</button>
-                <button onClick={() => setSellPercentage(1)} className="flex-1 text-xs bg-gray-700/80 hover:bg-gray-700 text-white py-1.5 px-2 rounded-md transition-colors">MAX</button>
-            </div>
-        </div>
-
-        {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
+        <p className="text-center text-gray-400 text-sm my-4">
+            Selling this investment will remove it from your portfolio and add its current value to your credits.
+        </p>
         
         <button
-          onClick={handleSellClick}
-          disabled={!sellAmount || parseFloat(sellAmount) <= 0}
-          className="w-full bg-gradient-to-r from-red-500 to-rose-500 text-white font-bold py-3 px-4 rounded-lg hover:from-red-600 hover:to-rose-600 transition-all duration-300 transform hover:scale-[1.02] shadow-lg hover:shadow-red-500/20 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed disabled:shadow-none disabled:scale-100"
+          onClick={() => onSell(investment, currentValue)}
+          className="w-full bg-gradient-to-r from-red-500 to-rose-500 text-white font-bold py-3 px-4 rounded-lg hover:from-red-600 hover:to-rose-600 transition-all duration-300 transform hover:scale-[1.02] shadow-lg hover:shadow-red-500/20"
         >
           Confirm Sale
         </button>

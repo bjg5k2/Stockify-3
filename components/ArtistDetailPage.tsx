@@ -17,7 +17,7 @@ const ArtistDetailPage: React.FC<ArtistDetailPageProps> = ({ artist, investments
 
     const artistInvestments = investments.filter(inv => inv.artistId === artist.id);
     const totalInvested = artistInvestments.reduce((sum, inv) => sum + inv.initialInvestment, 0);
-
+    
     const StatCard: React.FC<{ label: string; value: string | number; }> = ({ label, value }) => (
         <div className="bg-gray-900/50 p-4 rounded-lg text-center shadow-md">
             <span className="text-sm text-gray-400 block uppercase tracking-wider">{label}</span>
@@ -55,7 +55,7 @@ const ArtistDetailPage: React.FC<ArtistDetailPageProps> = ({ artist, investments
 
                     <div className="space-y-6">
                         <div>
-                            <h3 className="text-xl font-semibold text-gray-200 mb-2">Follower History</h3>
+                            <h3 className="text-xl font-semibold text-gray-200 mb-2">Follower History (30 Days)</h3>
                             <Chart data={artist.followerHistory} />
                         </div>
                         

@@ -11,20 +11,24 @@ export interface Artist {
   imageUrl: string;
   followers: number;
   followerHistory: FollowerHistoryPoint[];
-  bio?: string; // Biography from Gemini
 }
 
 export interface SpotifyArtist {
-  id:string;
-  name: string;
+  id: string;
+  name:string;
   imageUrl: string;
   followers: number;
 }
 
 export interface Investment {
-  id: string; // Unique ID for the investment, e.g., `${artistId}-${timestamp}`
+  id: string; // Unique ID for the investment
   artistId: string;
   initialInvestment: number; // in credits
   initialFollowers: number;
-  timestamp: number; // unix timestamp
+  timestamp: number; // when investment was made
+}
+
+export interface LocalUser {
+    userId: string;
+    username: string;
 }
