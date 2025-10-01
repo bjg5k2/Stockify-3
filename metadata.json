@@ -1,0 +1,5 @@
+{
+  "name": "Stockify",
+  "description": "A web application that simulates a stock market for music artists. Users can use virtual credits to invest in artists based on their Spotify follower count and track their portfolio's performance as artists gain or lose popularity.",
+  "requestFramePermissions": []
+}
