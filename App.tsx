@@ -1,7 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Artist, Investment, LocalUser, SpotifyArtist, FollowerHistoryPoint } from './types';
 import { ARTIST_IDS_IN_MARKET, generateRandomHistory } from './constants';
 import { getMultipleArtistsByIds } from './services/spotifyService';
+import { signInAnonymouslyIfNeeded } from './services/authService';
+import { updateLeaderboardEntry } from './services/leaderboardService';
+import { auth } from './firebase/config';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
 import Header from './components/Header';
 import HomePage from './components/HomePage';
@@ -11,12 +15,14 @@ import ArtistDetailPage from './components/ArtistDetailPage';
 import InvestmentModal from './components/InvestmentModal';
 import SellModal from './components/SellModal';
 import LoginPage from './components/LoginPage';
+import LeaderboardPage from './components/LeaderboardPage';
 
-type Page = 'home' | 'trade' | 'portfolio';
+type Page = 'home' | 'trade' | 'portfolio' | 'leaderboard';
 
 const INITIAL_CREDITS = 10000;
 
 function App() {
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<LocalUser | null>(null);
   const [artists, setArtists] = useState<Artist[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
@@ -34,6 +40,15 @@ function App() {
   const [viewingArtist, setViewingArtist] = useState<Artist | null>(null);
 
   // --- Data Loading and Persistence ---
+
+  // Effect for Firebase auth state
+  useEffect(() => {
+    signInAnonymouslyIfNeeded();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Effect to load the current user session and data on startup
   useEffect(() => {
@@ -120,8 +135,27 @@ function App() {
         return () => clearInterval(interval);
     }, [netWorth, user]);
 
+  // Debounced Leaderboard Update
+  const debouncedUpdateLeaderboard = useCallback(
+    debounce((fwUser: FirebaseUser, localUser: LocalUser, nw: number) => {
+      updateLeaderboardEntry(fwUser.uid, localUser.username, nw);
+    }, 2000),
+    []
+  );
+
+  useEffect(() => {
+    if (firebaseUser && user && netWorth > 0) {
+      debouncedUpdateLeaderboard(firebaseUser, user, netWorth);
+    }
+  }, [netWorth, user, firebaseUser, debouncedUpdateLeaderboard]);
+
+
   // --- Handlers ---
   const handleSignIn = (username: string) => {
+    if (!firebaseUser) {
+      alert("Still connecting to services, please try again in a moment.");
+      return;
+    }
     const userDataKey = `stockify_data_${username}`;
     const savedData = localStorage.getItem(userDataKey);
     
@@ -136,7 +170,7 @@ function App() {
       setNetWorthHistory([{ timestamp: Date.now(), count: INITIAL_CREDITS }]);
     }
     
-    const newUser: LocalUser = { userId: `local_${username}`, username };
+    const newUser: LocalUser = { userId: firebaseUser.uid, username };
     setUser(newUser);
     localStorage.setItem('stockify_user', JSON.stringify(newUser));
     setCurrentPage('home');
@@ -179,23 +213,19 @@ function App() {
 
     if (!investmentToSell || !artist) return;
 
-    // Calculate current total value of the investment
     const growthPercentage = (artist.followers - investmentToSell.initialFollowers) / investmentToSell.initialFollowers;
     const currentValue = investmentToSell.initialInvestment * (1 + growthPercentage);
 
-    // Sanity check: cannot sell for more than it's worth
-    if (amountToSell > currentValue + 0.01) { // Add tolerance for floating point issues
+    if (amountToSell > currentValue + 0.01) {
         console.error("Attempted to sell for more than current value");
         setSellingInvestment(null);
         return;
     }
 
-    // If selling all or more (due to float rounding), treat as a full sale
     if (amountToSell >= currentValue - 0.01) {
         setInvestments(prev => prev.filter(inv => inv.id !== investmentId));
-        setUserCredits(prev => prev + currentValue); // Give them the full value to avoid rounding errors
+        setUserCredits(prev => prev + currentValue);
     } else {
-        // It's a partial sale
         const sellPercentage = amountToSell / currentValue;
         const remainingInitialInvestment = investmentToSell.initialInvestment * (1 - sellPercentage);
         
@@ -241,7 +271,7 @@ function App() {
 
   // --- Render Logic ---
   if (isUserLoading) {
-    return <div className="min-h-screen bg-gray-900" />; // Blank screen while checking session
+    return <div className="min-h-screen" />; // Blank screen while checking session
   }
 
   if (!user) {
@@ -277,13 +307,15 @@ function App() {
             onViewDetail={setViewingArtist}
             onUpdateArtists={handleUpdateArtists}
         />;
+      case 'leaderboard':
+        return <LeaderboardPage />;
       default:
         return <HomePage onNavigateToTrade={() => handleNavigation('trade')} />;
     }
   };
 
   return (
-    <div className="bg-gray-900 text-white min-h-screen font-sans">
+    <div className="min-h-screen font-sans">
       <Header 
         currentPage={currentPage} 
         onNavigate={handleNavigation} 
@@ -292,7 +324,7 @@ function App() {
         username={user.username}
         onSignOut={handleSignOut}
       />
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 pt-24 md:pt-20 pb-10">
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 pt-24 md:pt-20 pb-20 md:pb-10">
         {isMarketLoading ? (
           <div className="text-center py-20">
             <p className="text-lg text-gray-400">Loading Market Data...</p>
@@ -328,5 +360,18 @@ function App() {
     </div>
   );
 }
+
+// Simple debounce function
+function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+
+  return (...args: Parameters<F>): void => {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+    timeout = setTimeout(() => func(...args), waitFor);
+  };
+}
+
 
 export default App;
