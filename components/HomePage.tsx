@@ -1,42 +1,85 @@
 import React from 'react';
+import { Page, PortfolioItem as PortfolioItemType } from '../types';
+import PortfolioItem from './PortfolioItem';
 
 interface HomePageProps {
-    onNavigateToTrade: () => void;
+    username: string;
+    netWorth: number;
+    portfolioItems: PortfolioItemType[];
+    onNavigate: (page: Page) => void;
 }
 
-const HomePage: React.FC<HomePageProps> = ({ onNavigateToTrade }) => {
-    return (
-        <div className="text-center flex flex-col items-center justify-center py-20 md:py-28 animate-fade-in-up">
-            <h1 className="text-5xl md:text-7xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-green-400 pb-4 mb-4">
-                Welcome to Stockify
-            </h1>
-            <p className="max-w-3xl text-lg md:text-xl text-gray-300 mb-10">
-                The fantasy stock market for music. Invest virtual credits in your favorite artists, track their growth based on real-world popularity, and build your ultimate music portfolio.
-            </p>
-            <button
-                onClick={onNavigateToTrade}
-                className="bg-gradient-to-r from-emerald-500 to-green-500 text-white font-bold py-4 px-10 rounded-full text-lg hover:from-emerald-600 hover:to-green-600 transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-emerald-400/20"
-            >
-                Start Trading Now
-            </button>
+const StatCard: React.FC<{ label: string; value: string; className?: string }> = ({ label, value, className }) => (
+    <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700/80 text-center">
+        <p className="text-sm text-gray-400 uppercase tracking-wider">{label}</p>
+        <p className={`text-3xl font-bold text-white mt-1 ${className}`}>{value}</p>
+    </div>
+);
 
-            <div className="mt-20 max-w-4xl w-full bg-gray-800/40 backdrop-blur-sm border border-gray-700/80 rounded-xl shadow-2xl p-8 text-left">
-                <div className="grid md:grid-cols-2 gap-8">
-                    <div>
-                        <h2 className="text-2xl font-bold text-white mb-3">How It Works</h2>
-                        <p className="text-gray-300 leading-relaxed">
-                            An artist's "stock value" is directly tied to their <strong className="text-emerald-400">Spotify follower count</strong>. When you invest, you're buying shares at their current follower level. As they gain more followers, the value of your investment increases proportionally. It's a simple, powerful way to track and capitalize on an artist's growing popularity.
+
+const HomePage: React.FC<HomePageProps> = ({ username, netWorth, portfolioItems, onNavigate }) => {
+    
+    const totalInvestment = portfolioItems.reduce((sum, item) => sum + item.totalInvestment, 0);
+    const totalValue = portfolioItems.reduce((sum, item) => sum + item.currentValue, 0);
+    const overallProfitLoss = totalValue - totalInvestment;
+    const isOverallGrowth = overallProfitLoss >= 0;
+
+    const formatCurrency = (amount: number) => {
+        return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).replace('$', 'C ');
+    };
+
+    const topHoldings = [...portfolioItems].sort((a, b) => b.currentValue - a.currentValue).slice(0, 3);
+
+    return (
+        <div className="animate-fade-in-up space-y-12">
+            <div>
+                <h1 className="text-4xl md:text-5xl font-bold text-white">
+                    Welcome back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-green-400">{username}</span>!
+                </h1>
+                <p className="mt-2 text-lg text-gray-300">Here's a snapshot of your portfolio performance.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <StatCard label="Net Worth" value={formatCurrency(netWorth)} />
+                <StatCard label="Total Invested" value={formatCurrency(totalInvestment)} />
+                <StatCard 
+                    label="Overall P/L" 
+                    value={`${isOverallGrowth ? '+' : ''}${formatCurrency(overallProfitLoss)}`}
+                    className={isOverallGrowth ? 'text-emerald-400' : 'text-red-400'}
+                />
+            </div>
+            
+            <div>
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-2xl font-bold text-white">Top Holdings</h2>
+                    <button 
+                        onClick={() => onNavigate('portfolio')}
+                        className="text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+                    >
+                        View Full Portfolio &rarr;
+                    </button>
+                </div>
+                {topHoldings.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {topHoldings.map(item => (
+                            <PortfolioItem 
+                                key={item.artist.id} 
+                                item={item} 
+                                onViewDetail={() => onNavigate('artistDetail')} // Simplified for dashboard view
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-16 bg-gray-800/30 rounded-lg border border-dashed border-gray-700">
+                        <h4 className="text-xl font-semibold text-white">Your portfolio is empty.</h4>
+                        <p className="text-gray-400 mt-2">
+                            <button onClick={() => onNavigate('trade')} className="text-emerald-400 font-semibold hover:underline">
+                                Start trading
+                            </button>
+                            {' '}to build your holdings!
                         </p>
                     </div>
-                    <div>
-                        <h2 className="text-2xl font-bold text-white mb-3">An Example</h2>
-                        <div className="space-y-2 text-gray-300">
-                            <p>1. You invest <strong className="font-bold text-white">C 1,000</strong> in Post Malone when he has <strong className="font-bold text-white">60,000,000</strong> followers.</p>
-                            <p>2. He drops a new hit album, and his follower count jumps to <strong className="font-bold text-white">66,000,000</strong> followers — a <strong className="font-bold text-emerald-400">10% increase!</strong></p>
-                            <p>3. Your initial investment has also grown by 10%. It's now worth <strong className="font-bold text-white">C 1,100</strong>, earning you a <strong className="font-bold text-emerald-400">C 100 profit.</strong></p>
-                        </div>
-                    </div>
-                </div>
+                )}
             </div>
         </div>
     );

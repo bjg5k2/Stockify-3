@@ -1,67 +1,31 @@
-import { doc, setDoc, getDoc, updateDoc, DocumentData } from "firebase/firestore"; 
-import { db } from "../firebase/config";
-import { User as FirebaseUser } from 'firebase/auth';
-import { UserProfile, Investment, FollowerHistoryPoint } from '../types';
 
-const INITIAL_CREDITS = 10000;
+// Fix: Provide content for the services/firestoreService.ts file.
+// NOTE: This is a placeholder for Firestore service functions.
+// This application uses local storage for data persistence instead of Firebase.
+// These functions are not implemented and serve as examples of what would exist.
 
-/**
- * Creates a new user profile document in Firestore after sign-up.
- * @param user The Firebase user object.
- * @param additionalData Additional data like displayName.
- */
-export const createUserProfile = async (user: FirebaseUser, additionalData: { displayName: string }) => {
-  const userRef = doc(db, "users", user.uid);
-  const { email, uid } = user;
-  const { displayName } = additionalData;
+import { Investment } from '../types';
+// import { db } from '../firebase/config';
+// import { setDoc, doc, getDocs, collection, query } from 'firebase/firestore';
 
-  const newUserProfile: UserProfile = {
-    uid,
-    email,
-    displayName,
-    credits: INITIAL_CREDITS,
-    investments: [],
-    netWorth: INITIAL_CREDITS,
-    netWorthHistory: [{ timestamp: Date.now(), count: INITIAL_CREDITS }]
-  };
 
-  try {
-    await setDoc(userRef, newUserProfile);
-  } catch (error) {
-    console.error("Error creating user profile in Firestore: ", error);
-  }
+export const saveInvestment = async (userId: string, investment: Investment): Promise<void> => {
+    console.log('Firestore (mock): Saving investment', { userId, investment });
+    // In a real app: await setDoc(doc(db, "users", userId, "investments", investment.id), investment);
+    return Promise.resolve();
 };
 
-/**
- * Retrieves a user's profile from Firestore.
- * @param uid The user's unique ID.
- */
-export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
-  const userRef = doc(db, "users", uid);
-  try {
-    const docSnap = await getDoc(userRef);
-    if (docSnap.exists()) {
-      return docSnap.data() as UserProfile;
-    } else {
-      console.warn("No such user profile in Firestore!");
-      return null;
-    }
-  } catch (error) {
-    console.error("Error fetching user profile: ", error);
-    return null;
-  }
+export const getUserInvestments = async (userId: string): Promise<Investment[]> => {
+    console.log('Firestore (mock): Getting investments', { userId });
+    // In a real app: 
+    // const q = query(collection(db, "users", userId, "investments"));
+    // const snapshot = await getDocs(q);
+    // return snapshot.docs.map(doc => doc.data() as Investment);
+    return Promise.resolve([]);
 };
 
-/**
- * Updates a user's profile in Firestore.
- * @param uid The user's unique ID.
- * @param data The data to update.
- */
-export const updateUserProfile = async (uid: string, data: Partial<UserProfile>) => {
-  const userRef = doc(db, "users", uid);
-  try {
-    await updateDoc(userRef, data);
-  } catch (error) {
-    console.error("Error updating user profile: ", error);
-  }
-};
+export const saveUserData = async (userId: string, data: any): Promise<void> => {
+     console.log('Firestore (mock): Saving user data', { userId, data });
+     // In a real app: await setDoc(doc(db, "users", userId), data, { merge: true });
+     return Promise.resolve();
+}

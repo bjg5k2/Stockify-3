@@ -1,7 +1,10 @@
 import React from 'react';
 import { SignOutIcon } from './icons';
+// Fix: Import the shared Page type.
+import { Page } from '../types';
 
-type Page = 'home' | 'trade' | 'portfolio' | 'leaderboard';
+// Fix: Removed local Page type to use the shared one from types.ts.
+// type Page = 'home' | 'trade' | 'portfolio' | 'leaderboard';
 
 interface HeaderProps {
     currentPage: Page;
@@ -43,7 +46,7 @@ const Header: React.FC<HeaderProps> = ({ currentPage, onNavigate, userCredits, n
                             <NavItem page="home" currentPage={currentPage} onNavigate={onNavigate}>Home</NavItem>
                             <NavItem page="trade" currentPage={currentPage} onNavigate={onNavigate}>Trade</NavItem>
                             <NavItem page="portfolio" currentPage={currentPage} onNavigate={onNavigate}>Portfolio</NavItem>
-                             <NavItem page="leaderboard" currentPage={currentPage} onNavigate={onNavigate}>Leaderboard</NavItem>
+                            <NavItem page="faq" currentPage={currentPage} onNavigate={onNavigate}>FAQs</NavItem>
                         </nav>
                     </div>
 
@@ -65,11 +68,11 @@ const Header: React.FC<HeaderProps> = ({ currentPage, onNavigate, userCredits, n
                 </div>
             </div>
              {/* Mobile Nav */}
-            <nav className="md:hidden flex items-center justify-around p-2 bg-gray-900/80 border-t border-gray-700/50 fixed bottom-0 left-0 right-0 z-50">
+            <nav className="md:hidden flex items-center justify-around p-2 bg-gray-900/80 border-t border-gray-700/50 fixed bottom-0 left-0 right-0">
                 <NavItem page="home" currentPage={currentPage} onNavigate={onNavigate}>Home</NavItem>
                 <NavItem page="trade" currentPage={currentPage} onNavigate={onNavigate}>Trade</NavItem>
                 <NavItem page="portfolio" currentPage={currentPage} onNavigate={onNavigate}>Portfolio</NavItem>
-                <NavItem page="leaderboard" currentPage={currentPage} onNavigate={onNavigate}>Leaderboard</NavItem>
+                <NavItem page="faq" currentPage={currentPage} onNavigate={onNavigate}>FAQs</NavItem>
             </nav>
         </header>
     );

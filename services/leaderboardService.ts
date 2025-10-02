@@ -1,31 +1,30 @@
-import { db } from '../firebase/config';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { UserProfile } from '../types';
+
+// Fix: Provide content for services/leaderboardService.ts file.
+
+// This is a mock leaderboard service. In a real application, this data
+// would be fetched from a backend service that aggregates user net worths.
+// For this simulation, we'll generate some static data.
 
 export interface LeaderboardEntry {
-    userId: string;
-    username: string;
-    netWorth: number;
+  userId: string;
+  username: string;
+  netWorth: number;
 }
 
-/**
- * Fetches the top 100 players from the leaderboard, sorted by net worth.
- */
+const mockLeaderboardData: LeaderboardEntry[] = [
+  { userId: 'user1', username: 'CryptoKing', netWorth: 150234 },
+  { userId: 'user2', username: 'MusicMogul', netWorth: 125890 },
+  { userId: 'user3', username: 'PopProphet', netWorth: 110450 },
+  { userId: 'user4', username: 'IndieInvestor', netWorth: 98600 },
+  { userId: 'user5', username: 'RockBroker', netWorth: 85200 },
+  { userId: 'user6', username: 'EDM_Eagle', netWorth: 76430 },
+  { userId: 'user7', username: 'FanFund', netWorth: 68110 },
+];
+
 export const getLeaderboard = async (): Promise<LeaderboardEntry[]> => {
-    const usersCol = collection(db, 'users');
-    const q = query(usersCol, orderBy('netWorth', 'desc'), limit(100));
-
-    const querySnapshot = await getDocs(q);
-    
-    const leaderboard: LeaderboardEntry[] = [];
-    querySnapshot.forEach((doc) => {
-        const data = doc.data() as UserProfile;
-        leaderboard.push({
-            userId: doc.id,
-            username: data.displayName,
-            netWorth: data.netWorth,
-        });
-    });
-
-    return leaderboard;
+  // Simulate network delay
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  // Return sorted data
+  return mockLeaderboardData.sort((a, b) => b.netWorth - a.netWorth);
 };
