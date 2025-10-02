@@ -5,12 +5,18 @@ import { getAuth } from "firebase/auth";
 // IMPORTANT: Replace with your actual Firebase configuration values.
 // You can get these from your project's settings on the Firebase console.
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyBF5gzPThKD1ga_zpvtdBpiQFsexbEpZyY",
+
+  authDomain: "stockify-75531.firebaseapp.com",
+
+  projectId: "stockify-75531",
+
+  storageBucket: "stockify-75531.firebasestorage.app",
+
+  messagingSenderId: "831334536771",
+
+  appId: "1:831334536771:web:104b8e8ca4fc2099c826f6"
+
 };
 
 // Initialize Firebase
