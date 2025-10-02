@@ -28,7 +28,12 @@ export interface Investment {
   timestamp: number; // when investment was made
 }
 
-export interface LocalUser {
-    userId: string;
-    username: string;
+export interface UserProfile {
+    uid: string;
+    email: string | null;
+    displayName: string;
+    credits: number;
+    investments: Investment[];
+    netWorth: number;
+    netWorthHistory: FollowerHistoryPoint[];
 }

@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Artist, Investment, LocalUser, SpotifyArtist, FollowerHistoryPoint } from './types';
+import { Artist, Investment, SpotifyArtist, FollowerHistoryPoint, UserProfile } from './types';
 import { ARTIST_IDS_IN_MARKET, generateRandomHistory } from './constants';
 import { getMultipleArtistsByIds } from './services/spotifyService';
-import { signInAnonymouslyIfNeeded } from './services/authService';
-import { updateLeaderboardEntry } from './services/leaderboardService';
-import { auth } from './firebase/config';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateListener, signOutUser } from './services/authService';
+import { getUserProfile, updateUserProfile } from './services/firestoreService';
+import { User as FirebaseUser } from 'firebase/auth';
 
 import Header from './components/Header';
 import HomePage from './components/HomePage';
@@ -19,19 +18,13 @@ import LeaderboardPage from './components/LeaderboardPage';
 
 type Page = 'home' | 'trade' | 'portfolio' | 'leaderboard';
 
-const INITIAL_CREDITS = 10000;
-
 function App() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [user, setUser] = useState<LocalUser | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [artists, setArtists] = useState<Artist[]>([]);
-  const [investments, setInvestments] = useState<Investment[]>([]);
-  const [userCredits, setUserCredits] = useState<number>(INITIAL_CREDITS);
-  const [netWorthHistory, setNetWorthHistory] = useState<{timestamp: number; count: number}[]>([]);
   
   const [currentPage, setCurrentPage] = useState<Page>('home');
-  const [isMarketLoading, setIsMarketLoading] = useState(true);
-  const [isUserLoading, setIsUserLoading] = useState(true);
+  const [isDataLoading, setIsDataLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Modals state
@@ -41,38 +34,27 @@ function App() {
 
   // --- Data Loading and Persistence ---
 
-  // Effect for Firebase auth state
+  // Effect for Firebase auth state listener
   useEffect(() => {
-    signInAnonymouslyIfNeeded();
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Effect to load the current user session and data on startup
-  useEffect(() => {
-    const savedUserJson = localStorage.getItem('stockify_user');
-    if (savedUserJson) {
-      const savedUser: LocalUser = JSON.parse(savedUserJson);
-      const userDataKey = `stockify_data_${savedUser.username}`;
-      const savedData = localStorage.getItem(userDataKey);
-      
-      if (savedData) {
-        const { investments, credits, netWorthHistory } = JSON.parse(savedData);
-        setInvestments(investments);
-        setUserCredits(credits);
-        setNetWorthHistory(netWorthHistory);
+    const unsubscribe = onAuthStateListener(async (user) => {
+      if (user) {
+        const profile = await getUserProfile(user.uid);
+        if (profile) {
+          setUserProfile(profile);
+        }
+      } else {
+        setUserProfile(null);
       }
-      setUser(savedUser);
-    }
-    setIsUserLoading(false);
+      setFirebaseUser(user);
+      setIsDataLoading(false);
+    });
+    return unsubscribe;
   }, []);
   
   // Effect to load market data
   useEffect(() => {
     const initializeMarket = async () => {
-      setIsMarketLoading(true);
+      setIsDataLoading(true);
       setError(null);
       try {
         const artistsFromApi = await getMultipleArtistsByIds(ARTIST_IDS_IN_MARKET);
@@ -88,101 +70,57 @@ function App() {
         console.error("Failed to initialize market", err);
         setError("Could not connect to Spotify to fetch artist data. Please check your connection or Spotify API credentials in `services/spotifyService.ts`.");
       } finally {
-        setIsMarketLoading(false);
+        // This is part of the overall loading state managed by auth
       }
     };
     initializeMarket();
   }, []);
 
-  // Effect to persist data whenever it changes for the logged-in user
-  useEffect(() => {
-    if (user) {
-      const userDataKey = `stockify_data_${user.username}`;
-      const dataToSave = {
-        investments,
-        credits: userCredits,
-        netWorthHistory,
-      };
-      localStorage.setItem(userDataKey, JSON.stringify(dataToSave));
-    }
-  }, [user, investments, userCredits, netWorthHistory]);
-
   const netWorth = useMemo(() => {
-    const portfolioValue = investments.reduce((total, investment) => {
+    if (!userProfile) return 0;
+    const portfolioValue = userProfile.investments.reduce((total, investment) => {
         const artist = artists.find(a => a.id === investment.artistId);
         if (!artist) return total;
-        const growthPercentage = (artist.followers - investment.initialFollowers) / investment.initialFollowers;
+        const growthPercentage = investment.initialFollowers > 0 ? (artist.followers - investment.initialFollowers) / investment.initialFollowers : 0;
         const currentValue = investment.initialInvestment * (1 + growthPercentage);
         return total + currentValue;
     }, 0);
-    return userCredits + portfolioValue;
-  }, [userCredits, investments, artists]);
-  
-   useEffect(() => {
-        if (!user) return; // Don't record history if not logged in
-        const interval = setInterval(() => {
-            setNetWorthHistory(prevHistory => {
-                const newPoint = { timestamp: Date.now(), count: netWorth };
-                const filteredHistory = prevHistory.filter(p => (Date.now() - p.timestamp) < 30 * 24 * 60 * 60 * 1000); // Keep 30 days
-                const lastPoint = filteredHistory[filteredHistory.length - 1];
-                if (!lastPoint || (Date.now() - lastPoint.timestamp > 60000 && Math.abs(lastPoint.count - netWorth) > 1)) {
-                    return [...filteredHistory, newPoint];
-                }
-                return filteredHistory;
-            });
-        }, 60 * 1000); // record every minute
+    return userProfile.credits + portfolioValue;
+  }, [userProfile, artists]);
 
-        return () => clearInterval(interval);
-    }, [netWorth, user]);
+  // Debounced Firestore Update
+  const debouncedUpdateFirestore = useCallback(
+    debounce((uid: string, profile: UserProfile, nw: number) => {
+      const updatedProfile = {
+        ...profile,
+        netWorth: nw,
+      };
+      // Keep net worth history tracking logic local but save it to firestore
+       const newPoint = { timestamp: Date.now(), count: nw };
+       const filteredHistory = (profile.netWorthHistory || []).filter(p => (Date.now() - p.timestamp) < 30 * 24 * 60 * 60 * 1000); // Keep 30 days
+       const lastPoint = filteredHistory[filteredHistory.length - 1];
+       if (!lastPoint || (Date.now() - lastPoint.timestamp > 60000 && Math.abs(lastPoint.count - nw) > 1)) {
+           updatedProfile.netWorthHistory = [...filteredHistory, newPoint];
+       } else {
+           updatedProfile.netWorthHistory = filteredHistory;
+       }
 
-  // Debounced Leaderboard Update
-  const debouncedUpdateLeaderboard = useCallback(
-    debounce((fwUser: FirebaseUser, localUser: LocalUser, nw: number) => {
-      updateLeaderboardEntry(fwUser.uid, localUser.username, nw);
+      updateUserProfile(uid, updatedProfile);
     }, 2000),
     []
   );
 
   useEffect(() => {
-    if (firebaseUser && user && netWorth > 0) {
-      debouncedUpdateLeaderboard(firebaseUser, user, netWorth);
+    if (firebaseUser && userProfile) {
+      debouncedUpdateFirestore(firebaseUser.uid, userProfile, netWorth);
     }
-  }, [netWorth, user, firebaseUser, debouncedUpdateLeaderboard]);
-
+  }, [userProfile, netWorth, firebaseUser, debouncedUpdateFirestore]);
 
   // --- Handlers ---
-  const handleSignIn = (username: string) => {
-    if (!firebaseUser) {
-      alert("Still connecting to services, please try again in a moment.");
-      return;
-    }
-    const userDataKey = `stockify_data_${username}`;
-    const savedData = localStorage.getItem(userDataKey);
-    
-    if (savedData) { // Existing user
-      const { investments, credits, netWorthHistory } = JSON.parse(savedData);
-      setInvestments(investments);
-      setUserCredits(credits);
-      setNetWorthHistory(netWorthHistory);
-    } else { // New user
-      setInvestments([]);
-      setUserCredits(INITIAL_CREDITS);
-      setNetWorthHistory([{ timestamp: Date.now(), count: INITIAL_CREDITS }]);
-    }
-    
-    const newUser: LocalUser = { userId: firebaseUser.uid, username };
-    setUser(newUser);
-    localStorage.setItem('stockify_user', JSON.stringify(newUser));
+  const handleSignOut = async () => {
+    await signOutUser();
+    setUserProfile(null);
     setCurrentPage('home');
-  };
-
-  const handleSignOut = () => {
-    localStorage.removeItem('stockify_user');
-    setUser(null);
-    // Reset game state for the login screen view
-    setInvestments([]);
-    setUserCredits(INITIAL_CREDITS);
-    setNetWorthHistory([]);
   };
 
   const handleNavigation = (page: Page) => {
@@ -191,8 +129,9 @@ function App() {
   };
 
   const handleInvest = (artistId: string, amount: number) => {
+    if (!userProfile) return;
     const artist = artists.find(a => a.id === artistId);
-    if (!artist || amount <= 0 || amount > userCredits) return;
+    if (!artist || amount <= 0 || amount > userProfile.credits) return;
 
     const newInvestment: Investment = {
       id: `inv_${Date.now()}`,
@@ -202,13 +141,17 @@ function App() {
       timestamp: Date.now(),
     };
     
-    setInvestments(prev => [...prev, newInvestment]);
-    setUserCredits(prev => prev - amount);
+    setUserProfile(prev => prev ? {
+      ...prev,
+      investments: [...prev.investments, newInvestment],
+      credits: prev.credits - amount
+    } : null);
     setInvestingArtist(null); // Close modal
   };
 
   const handleSell = (investmentId: string, amountToSell: number) => {
-    const investmentToSell = investments.find(inv => inv.id === investmentId);
+    if (!userProfile) return;
+    const investmentToSell = userProfile.investments.find(inv => inv.id === investmentId);
     const artist = artists.find(a => a.id === investmentToSell?.artistId);
 
     if (!investmentToSell || !artist) return;
@@ -221,22 +164,26 @@ function App() {
         setSellingInvestment(null);
         return;
     }
+    
+    let newCredits = userProfile.credits;
+    let newInvestments = [...userProfile.investments];
 
     if (amountToSell >= currentValue - 0.01) {
-        setInvestments(prev => prev.filter(inv => inv.id !== investmentId));
-        setUserCredits(prev => prev + currentValue);
+        newInvestments = newInvestments.filter(inv => inv.id !== investmentId);
+        newCredits += currentValue;
     } else {
         const sellPercentage = amountToSell / currentValue;
         const remainingInitialInvestment = investmentToSell.initialInvestment * (1 - sellPercentage);
         
-        setInvestments(prev => prev.map(inv => 
+        newInvestments = newInvestments.map(inv => 
             inv.id === investmentId 
             ? { ...inv, initialInvestment: remainingInitialInvestment }
             : inv
-        ));
-        setUserCredits(prev => prev + amountToSell);
+        );
+        newCredits += amountToSell;
     }
-    
+
+    setUserProfile(prev => prev ? { ...prev, credits: newCredits, investments: newInvestments } : null);
     setSellingInvestment(null); // Close modal
   };
   
@@ -270,19 +217,19 @@ function App() {
   };
 
   // --- Render Logic ---
-  if (isUserLoading) {
-    return <div className="min-h-screen" />; // Blank screen while checking session
+  if (isDataLoading) {
+    return <div className="min-h-screen flex items-center justify-center"><p>Loading Session...</p></div>;
   }
 
-  if (!user) {
-    return <LoginPage onSignIn={handleSignIn} />;
+  if (!firebaseUser || !userProfile) {
+    return <LoginPage />;
   }
   
   const renderPage = () => {
     if (viewingArtist) {
         return <ArtistDetailPage 
             artist={viewingArtist}
-            investments={investments}
+            investments={userProfile.investments}
             onBack={() => setViewingArtist(null)}
             onInvest={() => setInvestingArtist(viewingArtist)}
         />;
@@ -300,10 +247,10 @@ function App() {
         />;
       case 'portfolio':
         return <Portfolio 
-            investments={investments}
+            investments={userProfile.investments}
             artists={artists}
             onOpenSellModal={(investment, currentValue) => setSellingInvestment({ investment, currentValue })}
-            netWorthHistory={netWorthHistory}
+            netWorthHistory={userProfile.netWorthHistory || []}
             onViewDetail={setViewingArtist}
             onUpdateArtists={handleUpdateArtists}
         />;
@@ -319,13 +266,13 @@ function App() {
       <Header 
         currentPage={currentPage} 
         onNavigate={handleNavigation} 
-        userCredits={userCredits}
+        userCredits={userProfile.credits}
         netWorth={netWorth}
-        username={user.username}
+        username={userProfile.displayName}
         onSignOut={handleSignOut}
       />
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 pt-24 md:pt-20 pb-20 md:pb-10">
-        {isMarketLoading ? (
+        {artists.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-lg text-gray-400">Loading Market Data...</p>
           </div>
@@ -342,7 +289,7 @@ function App() {
       {investingArtist && (
         <InvestmentModal
           artist={investingArtist}
-          userCredits={userCredits}
+          userCredits={userProfile.credits}
           onInvest={handleInvest}
           onClose={() => setInvestingArtist(null)}
         />

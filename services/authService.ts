@@ -1,35 +1,29 @@
 import { auth } from '../firebase/config';
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { 
+    createUserWithEmailAndPassword, 
+    // Fix: Alias the 'signInWithEmailAndPassword' import to avoid a name collision with the wrapper function below.
+    signInWithEmailAndPassword as firebaseSignInWithEmailAndPassword, 
+    signOut, 
+    onAuthStateChanged,
+    updateProfile,
+    User
+} from 'firebase/auth';
 
-let isSigningIn = false;
-let authInitialized = false;
+export const signUpWithEmailAndPassword = async (email: string, password: string, displayName: string) => {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    await updateProfile(userCredential.user, { displayName });
+    return userCredential;
+};
 
-// Monitor auth state to check if we've already initialized.
-onAuthStateChanged(auth, (user) => {
-    if (user) {
-        authInitialized = true;
-    }
-});
+export const signInWithEmailAndPassword = (email: string, password: string) => {
+    // Fix: Call the aliased Firebase function instead of the local wrapper to prevent recursion and pass the correct arguments.
+    return firebaseSignInWithEmailAndPassword(auth, email, password);
+};
 
-/**
- * Signs in the user anonymously if they are not already signed in.
- * This ensures each user has a stable, unique ID for the leaderboard.
- */
-export const signInAnonymouslyIfNeeded = async () => {
-    // Wait a moment for the initial auth state to be loaded
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
-    if (auth.currentUser || isSigningIn || authInitialized) {
-        return;
-    }
+export const signOutUser = () => {
+    return signOut(auth);
+};
 
-    isSigningIn = true;
-    try {
-        await signInAnonymously(auth);
-        console.log("Signed in anonymously");
-    } catch (error) {
-        console.error("Error signing in anonymously: ", error);
-    } finally {
-        isSigningIn = false;
-    }
+export const onAuthStateListener = (callback: (user: User | null) => void) => {
+    return onAuthStateChanged(auth, callback);
 };
