@@ -1,45 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Artist, Investment } from '../types';
 import { TrendUpIcon, TrendDownIcon } from './icons';
 import Chart from './Chart';
-// Fix: Import the Gemini service function.
-import { generateArtistInvestmentAnalysis } from '../services/geminiService';
 
 interface ArtistDetailPageProps {
   artist: Artist;
   investments: Investment[];
   onBack: () => void;
   onInvest: (artist: Artist) => void;
-  onSell: (artist: Artist, investments: Investment[]) => void;
 }
 
-const ArtistDetailPage: React.FC<ArtistDetailPageProps> = ({ artist, investments, onBack, onInvest, onSell }) => {
+const ArtistDetailPage: React.FC<ArtistDetailPageProps> = ({ artist, investments, onBack, onInvest }) => {
     const history = artist.followerHistory;
     const followerChange = history.length > 1 ? history[history.length - 1].count - history[0].count : 0;
     const isGrowth = followerChange >= 0;
 
     const artistInvestments = investments.filter(inv => inv.artistId === artist.id).sort((a,b) => a.timestamp - b.timestamp);
     
-    // Fix: Add state for AI analysis.
-    const [analysis, setAnalysis] = useState<string>('');
-    const [isAnalysisLoading, setIsAnalysisLoading] = useState<boolean>(true);
-
-    // Fix: Fetch AI analysis when the component mounts or the artist changes.
-    useEffect(() => {
-        const fetchAnalysis = async () => {
-            if (!artist) return;
-            setIsAnalysisLoading(true);
-            const result = await generateArtistInvestmentAnalysis(artist.name, artist.followerHistory);
-            setAnalysis(result);
-            setIsAnalysisLoading(false);
-        };
-
-        fetchAnalysis();
-    }, [artist]);
-
-
     const calculateCurrentValue = (investment: Investment) => {
-        if (investment.initialFollowers === 0) return investment.initialInvestment;
         const growth = (artist.followers - investment.initialFollowers) / investment.initialFollowers;
         return investment.initialInvestment * (1 + growth);
     };
@@ -63,7 +41,7 @@ const ArtistDetailPage: React.FC<ArtistDetailPageProps> = ({ artist, investments
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-                Back
+                Back to Market
             </button>
 
             <div className="bg-gray-800/40 backdrop-blur-sm border border-gray-700/80 rounded-xl shadow-2xl overflow-hidden">
@@ -90,18 +68,6 @@ const ArtistDetailPage: React.FC<ArtistDetailPageProps> = ({ artist, investments
                             <h3 className="text-xl font-semibold text-gray-200 mb-2">Follower History (30 Days)</h3>
                             <Chart data={artist.followerHistory} />
                         </div>
-
-                        {/* Fix: Add the AI Investment Analysis section. */}
-                        <div>
-                            <h3 className="text-xl font-semibold text-gray-200 mb-2">AI Investment Analysis</h3>
-                            <div className="bg-gray-900/50 p-4 rounded-lg min-h-[6rem] flex items-center justify-center">
-                                {isAnalysisLoading ? (
-                                    <p className="text-gray-400 italic">Generating AI analysis...</p>
-                                ) : (
-                                    <p className="text-gray-300 leading-relaxed">{analysis}</p>
-                                )}
-                            </div>
-                        </div>
                         
                         <div>
                             <h3 className="text-xl font-semibold text-gray-200 mb-2">Your Investment History</h3>
@@ -125,22 +91,13 @@ const ArtistDetailPage: React.FC<ArtistDetailPageProps> = ({ artist, investments
                                 )}
                             </div>
                         </div>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <button
-                                onClick={() => onInvest(artist)}
-                                className="w-full bg-gradient-to-r from-emerald-500 to-green-500 text-white font-bold py-3 px-4 rounded-lg hover:from-emerald-600 hover:to-green-600 transition-all duration-300 transform hover:scale-[1.02] shadow-lg hover:shadow-emerald-500/20"
-                            >
-                                Invest More
-                            </button>
-                             <button
-                                onClick={() => onSell(artist, artistInvestments)}
-                                disabled={artistInvestments.length === 0}
-                                className="w-full bg-gradient-to-r from-red-500 to-rose-500 text-white font-bold py-3 px-4 rounded-lg hover:from-red-600 hover:to-rose-600 transition-all duration-300 transform hover:scale-[1.02] shadow-lg hover:shadow-red-500/20 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed disabled:shadow-none disabled:scale-100"
-                            >
-                                Sell Holdings
-                            </button>
-                        </div>
+
+                        <button
+                            onClick={() => onInvest(artist)}
+                            className="w-full bg-gradient-to-r from-emerald-500 to-green-500 text-white font-bold py-3 px-4 rounded-lg hover:from-emerald-600 hover:to-green-600 transition-all duration-300 transform hover:scale-[1.02] shadow-lg hover:shadow-emerald-500/20"
+                        >
+                            Invest More in {artist.name}
+                        </button>
                     </div>
                 </div>
             </div>
