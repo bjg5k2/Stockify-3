@@ -1,161 +1,138 @@
-// App.tsx
-import React, { useState, useEffect, useMemo } from 'react';
-import { Artist, Investment, SpotifyArtist, LocalUser } from './types';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Artist, SpotifyArtist, Investment } from './types';
 import { ARTIST_IDS_IN_MARKET, generateRandomHistory } from './constants';
 import { getMultipleArtistsByIds } from './services/spotifyService';
-
 import Header from './components/Header';
+import LoginPage from './components/LoginPage';
 import HomePage from './components/HomePage';
 import TradePage from './components/TradePage';
 import Portfolio from './components/Portfolio';
+import ArtistDetailPage from './components/ArtistDetailPage';
 import InvestmentModal from './components/InvestmentModal';
 import SellModal from './components/SellModal';
-import ArtistDetailPage from './components/ArtistDetailPage';
-import LoginPage from './components/LoginPage';
-
-type Page = 'home' | 'trade' | 'portfolio';
 
 const INITIAL_CREDITS = 10000;
-const LOCAL_STORAGE_KEY = 'stockify_save_data';
-
-interface GameState {
-    user: LocalUser;
-    credits: number;
-    investments: Investment[];
-    netWorthHistory: { timestamp: number; count: number }[];
-    lastUpdated: string;
-}
+const LOCAL_STORAGE_PREFIX = 'stockify_';
 
 const App: React.FC = () => {
-    const [localUser, setLocalUser] = useState<LocalUser | null>(null);
-    const [credits, setCredits] = useState<number>(INITIAL_CREDITS);
+    const [user, setUser] = useState<{ username: string } | null>(null);
+    const [artists, setArtists] = useState<Artist[]>([]);
     const [investments, setInvestments] = useState<Investment[]>([]);
-    const [netWorthHistory, setNetWorthHistory] = useState<{ timestamp: number; count: number }[]>([]);
-    const [artistsInMarket, setArtistsInMarket] = useState<Artist[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    const [currentPage, setCurrentPage] = useState<Page>('home');
-    const [artistToInvest, setArtistToInvest] = useState<Artist | null>(null);
-    const [investmentToSell, setInvestmentToSell] = useState<{ investment: Investment, artist: Artist, currentValue: number } | null>(null);
-    const [artistToView, setArtistToView] = useState<Artist | null>(null);
-
-    // Initial load from localStorage and fetch market data
-    useEffect(() => {
-        const loadGame = async () => {
-            // Load saved data from local storage
-            const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
-            if (savedData) {
-                try {
-                    const parsedData: GameState = JSON.parse(savedData);
-                    setLocalUser(parsedData.user);
-                    setCredits(parsedData.credits);
-                    setInvestments(parsedData.investments);
-                    setNetWorthHistory(parsedData.netWorthHistory);
-                } catch {
-                    console.error("Failed to parse saved data. Starting fresh.");
-                }
-            }
-
-            // Fetch initial artist data
-            try {
-                const spotifyArtists = await getMultipleArtistsByIds(ARTIST_IDS_IN_MARKET);
-                const artistsWithHistory = spotifyArtists.map(sa => ({
-                    ...sa,
-                    followerHistory: generateRandomHistory(sa.followers),
-                }));
-                setArtistsInMarket(artistsWithHistory);
-            } catch (error) {
-                console.error("Failed to fetch initial artist data", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadGame();
-    }, []);
-
-    // Save game state to localStorage whenever it changes
-    useEffect(() => {
-        if (!loading && localUser) {
-            const gameState: GameState = {
-                user: localUser,
-                credits,
-                investments,
-                netWorthHistory,
-                lastUpdated: new Date().toISOString()
-            };
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(gameState));
-        }
-    }, [localUser, credits, investments, netWorthHistory, loading]);
+    const [userCredits, setUserCredits] = useState<number>(INITIAL_CREDITS);
+    const [currentPage, setCurrentPage] = useState<'home' | 'trade' | 'portfolio' | 'leaderboard'>('home');
+    const [selectedArtistForDetail, setSelectedArtistForDetail] = useState<Artist | null>(null);
+    const [modal, setModal] = useState<{ type: 'invest' | 'sell'; artist: Artist; investments?: Investment[] } | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     const netWorth = useMemo(() => {
-        return investments.reduce((total, inv) => {
-            const artist = artistsInMarket.find(a => a.id === inv.artistId);
-            if (!artist) return total;
+        const holdingsValue = investments.reduce((sum, inv) => {
+            const artist = artists.find(a => a.id === inv.artistId);
+            if (!artist) return sum;
             const growth = inv.initialFollowers > 0 ? (artist.followers - inv.initialFollowers) / inv.initialFollowers : 0;
-            return total + inv.initialInvestment * (1 + growth);
-        }, credits);
-    }, [investments, credits, artistsInMarket]);
+            return sum + inv.initialInvestment * (1 + growth);
+        }, 0);
+        return userCredits + holdingsValue;
+    }, [userCredits, investments, artists]);
     
-    // Update net worth history periodically
-     useEffect(() => {
-        const interval = setInterval(() => {
-            if (localUser) {
-                setNetWorthHistory(prev => {
-                    const newHistory = [...prev, { timestamp: Date.now(), count: netWorth }];
-                    if (newHistory.length > 30) newHistory.shift(); // Keep history to 30 points
-                    return newHistory;
-                });
+    // --- Data Persistence ---
+    useEffect(() => {
+        try {
+            const savedUser = localStorage.getItem(`${LOCAL_STORAGE_PREFIX}user`);
+            if (savedUser) {
+                const parsedUser = JSON.parse(savedUser);
+                setUser(parsedUser);
+                const savedCredits = localStorage.getItem(`${LOCAL_STORAGE_PREFIX}${parsedUser.username}_credits`);
+                const savedInvestments = localStorage.getItem(`${LOCAL_STORAGE_PREFIX}${parsedUser.username}_investments`);
+                if (savedCredits) setUserCredits(JSON.parse(savedCredits));
+                if (savedInvestments) setInvestments(JSON.parse(savedInvestments));
             }
-        }, 60 * 1000); // every minute
-        return () => clearInterval(interval);
-    }, [netWorth, localUser]);
+        } catch (e) {
+            console.error("Failed to load data from localStorage", e);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (user) {
+            try {
+                localStorage.setItem(`${LOCAL_STORAGE_PREFIX}user`, JSON.stringify(user));
+                localStorage.setItem(`${LOCAL_STORAGE_PREFIX}${user.username}_credits`, JSON.stringify(userCredits));
+                localStorage.setItem(`${LOCAL_STORAGE_PREFIX}${user.username}_investments`, JSON.stringify(investments));
+            } catch (e) {
+                console.error("Failed to save data to localStorage", e);
+            }
+        }
+    }, [user, userCredits, investments]);
 
 
-    const handleLogin = (username: string) => {
-        const newUser: LocalUser = {
-            userId: `user_${Date.now()}`,
-            username: username
-        };
-        setLocalUser(newUser);
-        setCredits(INITIAL_CREDITS);
-        setInvestments([]);
-        setNetWorthHistory([{ timestamp: Date.now(), count: INITIAL_CREDITS }]);
+    // --- Data Fetching ---
+    const fetchMarketArtists = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const spotifyArtists = await getMultipleArtistsByIds(ARTIST_IDS_IN_MARKET);
+            const marketArtists = spotifyArtists.map(sa => ({
+                ...sa,
+                followerHistory: generateRandomHistory(sa.followers),
+            }));
+            setArtists(marketArtists);
+        } catch (err: any) {
+            setError(err.message || 'Failed to load artist data. Please check your Spotify credentials.');
+            console.error(err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (user) {
+            fetchMarketArtists();
+        } else {
+            setIsLoading(false);
+        }
+    }, [user, fetchMarketArtists]);
+
+    // --- Handlers ---
+    const handleSignIn = (username: string) => {
+        const userData = { username };
+        setUser(userData);
+        // Load or initialize user-specific data
+        const savedCredits = localStorage.getItem(`${LOCAL_STORAGE_PREFIX}${username}_credits`);
+        const savedInvestments = localStorage.getItem(`${LOCAL_STORAGE_PREFIX}${username}_investments`);
+        setUserCredits(savedCredits ? JSON.parse(savedCredits) : INITIAL_CREDITS);
+        setInvestments(savedInvestments ? JSON.parse(savedInvestments) : []);
+        setCurrentPage('home');
     };
 
-    const handleReset = () => {
-        if (window.confirm("Are you sure you want to reset your game? All progress will be lost.")) {
-            localStorage.removeItem(LOCAL_STORAGE_KEY);
-            setLocalUser(null);
-            setCredits(INITIAL_CREDITS);
-            setInvestments([]);
-            setNetWorthHistory([]);
-            setCurrentPage('home');
-        }
+    const handleSignOut = () => {
+        localStorage.removeItem(`${LOCAL_STORAGE_PREFIX}user`);
+        setUser(null);
+        setArtists([]);
+        setInvestments([]);
+        setUserCredits(INITIAL_CREDITS);
     };
 
     const handleInvest = (artistId: string, amount: number) => {
-        const artist = artistsInMarket.find(a => a.id === artistId);
-        if (!artist || amount > credits || amount <= 0) {
-            return;
-        }
+        const artist = artists.find(a => a.id === artistId);
+        if (!artist || amount <= 0 || amount > userCredits) return;
 
         const newInvestment: Investment = {
-            id: `inv_${artist.id}_${Date.now()}`,
-            artistId: artist.id,
+            id: `inv_${Date.now()}_${Math.random()}`,
+            artistId,
             initialInvestment: amount,
             initialFollowers: artist.followers,
             timestamp: Date.now(),
         };
-
-        setCredits(prev => prev - amount);
+        
+        setUserCredits(prev => prev - amount);
         setInvestments(prev => [...prev, newInvestment]);
-        setArtistToInvest(null);
+        setModal(null);
     };
 
-    const handleSell = (investmentToSell: Investment, sellValue: number) => {
-        setCredits(prev => prev + sellValue);
-        setInvestments(prev => prev.filter(inv => inv.id !== investmentToSell.id));
-        setInvestmentToSell(null);
+    const handleSell = (artistId: string, sellValue: number) => {
+        setUserCredits(prev => prev + sellValue);
+        setInvestments(prev => prev.filter(inv => inv.artistId !== artistId));
+        setModal(null);
     };
 
     const handleAddArtist = async (spotifyArtist: SpotifyArtist): Promise<Artist> => {
@@ -163,110 +140,96 @@ const App: React.FC = () => {
             ...spotifyArtist,
             followerHistory: generateRandomHistory(spotifyArtist.followers),
         };
-        setArtistsInMarket(prev => {
-            if (prev.find(a => a.id === newArtist.id)) {
-                return prev;
-            }
-            return [...prev, newArtist];
-        });
+        setArtists(prev => [...prev, newArtist]);
         return newArtist;
     };
     
-    const handleUpdateArtists = (updatedArtists: SpotifyArtist[]) => {
-        setArtistsInMarket(prevMarket => {
-            return prevMarket.map(marketArtist => {
-                const updated = updatedArtists.find(ua => ua.id === marketArtist.id);
-                if (updated && updated.followers !== marketArtist.followers) {
-                    const newHistory = [...marketArtist.followerHistory, { timestamp: Date.now(), count: updated.followers }];
-                    if (newHistory.length > 30) newHistory.shift();
-                    return { ...marketArtist, followers: updated.followers, followerHistory: newHistory };
-                }
-                return marketArtist;
-            });
-        });
+    const handleViewDetail = (artistId: string) => {
+        const artist = artists.find(a => a.id === artistId);
+        if(artist) {
+            setSelectedArtistForDetail(artist);
+        }
     };
-
-    if (loading) {
-        return <div className="bg-gray-900 text-white min-h-screen flex items-center justify-center">Loading...</div>;
+    
+    const handleNavigate = (page: 'home' | 'trade' | 'portfolio' | 'leaderboard') => {
+        setSelectedArtistForDetail(null);
+        setCurrentPage(page);
+    };
+    
+    // --- Render Logic ---
+    if (!user) {
+        return <LoginPage onSignIn={handleSignIn} />;
     }
 
-    if (!localUser) {
-        return <LoginPage onLogin={handleLogin} />;
+    if (isLoading) {
+        return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">Loading Artist Data...</div>;
     }
 
-    const renderPage = () => {
-        if (artistToView) {
-            return <ArtistDetailPage
-                artist={artistToView}
-                investments={investments}
-                onBack={() => setArtistToView(null)}
-                onInvest={setArtistToInvest}
-            />;
+    const renderContent = () => {
+        if (selectedArtistForDetail) {
+            return (
+                <ArtistDetailPage
+                    artist={selectedArtistForDetail}
+                    investments={investments}
+                    onBack={() => setSelectedArtistForDetail(null)}
+                    onInvest={(artist) => setModal({ type: 'invest', artist })}
+                    onSell={(artist, artistInvestments) => setModal({ type: 'sell', artist, investments: artistInvestments })}
+                />
+            );
         }
 
         switch (currentPage) {
-            case 'home':
-                return <HomePage onNavigateToTrade={() => setCurrentPage('trade')} />;
             case 'trade':
                 return <TradePage
-                    artistsInMarket={artistsInMarket}
-                    onInvest={setArtistToInvest}
-                    onViewDetail={setArtistToView}
+                    artistsInMarket={artists}
+                    onInvest={(artist) => setModal({ type: 'invest', artist })}
+                    onViewDetail={handleViewDetail}
                     onAddArtist={handleAddArtist}
                 />;
             case 'portfolio':
-                return <Portfolio
-                    investments={investments}
-                    artists={artistsInMarket}
-                    onOpenSellModal={(investment, currentValue) => {
-                        const artist = artistsInMarket.find(a => a.id === investment.artistId);
-                        if (artist) {
-                            setInvestmentToSell({ investment, artist, currentValue });
-                        }
-                    }}
-                    netWorthHistory={netWorthHistory}
-                    onViewDetail={setArtistToView}
-                    onUpdateArtists={handleUpdateArtists}
+                return <Portfolio 
+                    investments={investments} 
+                    artists={artists} 
+                    onViewDetail={handleViewDetail} 
                 />;
+            case 'home':
             default:
-                return <HomePage onNavigateToTrade={() => setCurrentPage('trade')} />;
+                return <HomePage onNavigateToTrade={() => handleNavigate('trade')} />;
         }
-    };
+    }
 
     return (
-        <div className="bg-gray-900 text-white min-h-screen font-sans">
+        <div className="bg-gray-900 text-white min-h-screen font-sans bg-gradient-to-br from-gray-900 via-gray-900 to-emerald-900/40">
             <Header
-                currentPage={currentPage}
-                onNavigate={setCurrentPage}
-                userCredits={credits}
+                currentPage={selectedArtistForDetail ? 'trade' : currentPage}
+                onNavigate={handleNavigate}
+                userCredits={userCredits}
                 netWorth={netWorth}
-                username={localUser.username}
-                onReset={handleReset}
+                username={user.username}
+                onSignOut={handleSignOut}
             />
-            <main className="container mx-auto px-4 py-8 pt-24">
-                {renderPage()}
+            <main className="container mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-24 md:pb-8">
+                 {error ? <div className="text-center text-red-400 p-4 bg-red-900/50 rounded-lg">{error}</div> : renderContent()}
             </main>
 
-            {artistToInvest && (
+            {modal?.type === 'invest' && (
                 <InvestmentModal
-                    artist={artistToInvest}
-                    userCredits={credits}
+                    artist={modal.artist}
+                    userCredits={userCredits}
                     onInvest={handleInvest}
-                    onClose={() => setArtistToInvest(null)}
+                    onClose={() => setModal(null)}
                 />
             )}
-
-            {investmentToSell && (
-                <SellModal
-                    investment={investmentToSell.investment}
-                    artist={investmentToSell.artist}
-                    currentValue={investmentToSell.currentValue}
-                    onSell={() => handleSell(investmentToSell.investment, investmentToSell.currentValue)}
-                    onClose={() => setInvestmentToSell(null)}
+            {modal?.type === 'sell' && modal.investments && (
+                 <SellModal
+                    artist={modal.artist}
+                    investments={modal.investments}
+                    onSell={handleSell}
+                    onClose={() => setModal(null)}
                 />
             )}
         </div>
     );
-};
+}
 
 export default App;

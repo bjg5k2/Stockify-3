@@ -5,30 +5,31 @@ export interface FollowerHistoryPoint {
   count: number;
 }
 
-export interface Artist {
-  id: string; // Spotify Artist ID
+export interface SpotifyArtist {
+  id: string;
   name: string;
   imageUrl: string;
   followers: number;
+}
+
+export interface Artist extends SpotifyArtist {
   followerHistory: FollowerHistoryPoint[];
 }
 
-export interface SpotifyArtist {
-  id: string;
-  name:string;
-  imageUrl: string;
-  followers: number;
-}
-
 export interface Investment {
-  id: string; // Unique ID for the investment
+  id: string; // unique ID for the investment instance
   artistId: string;
-  initialInvestment: number; // in credits
+  initialInvestment: number;
   initialFollowers: number;
-  timestamp: number; // when investment was made
+  timestamp: number;
 }
 
-export interface LocalUser {
-    userId: string;
-    username: string;
+// This will represent the user's consolidated holdings in a single artist for portfolio display
+export interface PortfolioItem {
+    artist: Artist;
+    totalInvestment: number;
+    currentValue: number;
+    profitOrLoss: number;
+    profitOrLossPercentage: number;
+    investments: Investment[];
 }

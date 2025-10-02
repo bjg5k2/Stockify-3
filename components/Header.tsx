@@ -1,7 +1,7 @@
 import React from 'react';
-import { RefreshIcon } from './icons';
+import { SignOutIcon } from './icons';
 
-type Page = 'home' | 'trade' | 'portfolio';
+type Page = 'home' | 'trade' | 'portfolio' | 'leaderboard';
 
 interface HeaderProps {
     currentPage: Page;
@@ -9,70 +9,66 @@ interface HeaderProps {
     userCredits: number;
     netWorth: number;
     username: string;
-    onReset: () => void;
+    onSignOut: () => void;
 }
 
-const NavLink: React.FC<{
-    page: Page,
-    currentPage: Page,
-    onClick: (page: Page) => void,
-    children: React.ReactNode
-}> = ({ page, currentPage, onClick, children }) => {
+const NavItem: React.FC<{ page: Page; currentPage: Page; onNavigate: (page: Page) => void; children: React.ReactNode }> = ({ page, currentPage, onNavigate, children }) => {
     const isActive = currentPage === page;
     return (
         <button
-            onClick={() => onClick(page)}
-            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                isActive
-                ? 'bg-emerald-500/20 text-emerald-300'
-                : 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
+            onClick={() => onNavigate(page)}
+            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                isActive ? 'bg-emerald-500/20 text-emerald-300' : 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
             }`}
         >
             {children}
         </button>
     );
-};
-
-const formatCurrency = (amount: number) => {
-    return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).replace('$', 'C ');
 }
 
-const Header: React.FC<HeaderProps> = ({ currentPage, onNavigate, userCredits, netWorth, username, onReset }) => {
+const Header: React.FC<HeaderProps> = ({ currentPage, onNavigate, userCredits, netWorth, username, onSignOut }) => {
+    const formatCredits = (amount: number) => {
+        return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).replace('$', 'C ');
+    }
+
     return (
-        <header className="bg-gray-900/50 backdrop-blur-lg border-b border-gray-700/50 fixed top-0 left-0 right-0 z-40">
-            <div className="container mx-auto px-4">
-                <div className="flex items-center justify-between h-20">
+        <header className="fixed top-0 left-0 right-0 z-40 bg-gray-900/50 backdrop-blur-lg border-b border-gray-700/50">
+            <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex items-center justify-between h-16">
                     <div className="flex items-center space-x-8">
-                        <div className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-green-400">
-                            Stockify
+                        <div className="flex items-center space-x-2">
+                             <span className="text-xl font-bold text-white">Stockify</span>
                         </div>
-                        <nav className="hidden md:flex items-center space-x-2">
-                           <NavLink page="home" currentPage={currentPage} onClick={onNavigate}>Home</NavLink>
-                           <NavLink page="trade" currentPage={currentPage} onClick={onNavigate}>Trade</NavLink>
-                           <NavLink page="portfolio" currentPage={currentPage} onClick={onNavigate}>Portfolio</NavLink>
+                        <nav className="hidden md:flex items-center space-x-4">
+                            <NavItem page="home" currentPage={currentPage} onNavigate={onNavigate}>Home</NavItem>
+                            <NavItem page="trade" currentPage={currentPage} onNavigate={onNavigate}>Trade</NavItem>
+                            <NavItem page="portfolio" currentPage={currentPage} onNavigate={onNavigate}>Portfolio</NavItem>
                         </nav>
                     </div>
 
                     <div className="flex items-center space-x-4">
-                        <div className="text-right hidden sm:block">
-                             <div className="text-xs text-gray-400">Net Worth</div>
-                             <div className="text-md font-semibold text-white">{formatCurrency(netWorth)}</div>
+                        <div className="text-right">
+                             <p className="text-xs text-gray-400">Net Worth</p>
+                             <p className="text-sm font-bold text-white">{formatCredits(netWorth)}</p>
                         </div>
-                         <div className="text-right">
-                             <div className="text-xs text-gray-400">Credits</div>
-                             <div className="text-md font-semibold text-emerald-400">{formatCurrency(userCredits)}</div>
+                        <div className="h-8 w-px bg-gray-700"></div>
+                        <div className="text-right">
+                             <p className="text-xs text-gray-400">Credits</p>
+                             <p className="text-sm font-bold text-emerald-400">{formatCredits(userCredits)}</p>
                         </div>
-                        <div className="flex items-center space-x-2 pl-2 border-l border-gray-700">
-                             <div className="text-right">
-                                <div className="text-sm font-medium text-white">{username}</div>
-                             </div>
-                             <button onClick={onReset} title="Reset Game" className="bg-gray-700/80 hover:bg-red-500/50 text-gray-300 hover:text-white p-2 rounded-full transition-colors">
-                                <RefreshIcon className="w-5 h-5" />
-                            </button>
-                        </div>
+                        <div className="h-8 w-px bg-gray-700"></div>
+                        <button onClick={onSignOut} title="Sign Out" className="text-gray-400 hover:text-white transition-colors">
+                            <SignOutIcon className="w-6 h-6" />
+                        </button>
                     </div>
                 </div>
             </div>
+             {/* Mobile Nav */}
+            <nav className="md:hidden flex items-center justify-around p-2 bg-gray-900/80 border-t border-gray-700/50 fixed bottom-0 left-0 right-0">
+                <NavItem page="home" currentPage={currentPage} onNavigate={onNavigate}>Home</NavItem>
+                <NavItem page="trade" currentPage={currentPage} onNavigate={onNavigate}>Trade</NavItem>
+                <NavItem page="portfolio" currentPage={currentPage} onNavigate={onNavigate}>Portfolio</NavItem>
+            </nav>
         </header>
     );
 };
