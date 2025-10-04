@@ -1,22 +1,19 @@
-// Fix: Provide full implementation for the main App component.
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  Page,
-  Artist,
-  UserData,
-  Investment,
-  Transaction,
-  PortfolioItem,
-  FollowerHistoryPoint,
-  MarketMover,
-  MostTraded
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { 
+    Page, 
+    UserData, 
+    Artist, 
+    Investment, 
+    Transaction, 
+    PortfolioItem, 
+    SpotifyArtist,
+    MarketMover,
+    MostTraded
 } from './types';
-import { signIn, signOut, loadUser, saveAllUserData, getAllUserData } from './services/authService';
+import { signIn, signOut, saveAllUserData, getAllUserData, loadUser } from './services/authService';
 import { getMultipleArtistsByIds } from './services/spotifyService';
-import { SIMULATION_TICK_RATE_MS, DAYS_PER_TICK, FOLLOWER_GROWTH_RATE_MIN, FOLLOWER_GROWTH_RATE_MAX, POPULARITY_INFLUENCE } from './constants';
-
-import Header from './components/Header';
 import LoginPage from './components/LoginPage';
+import Header from './components/Header';
 import HomePage from './components/HomePage';
 import Portfolio from './components/Portfolio';
 import TradePage from './components/TradePage';
@@ -26,384 +23,402 @@ import InvestmentModal from './components/InvestmentModal';
 import SellModal from './components/SellModal';
 import ArtistDetailPage from './components/ArtistDetailPage';
 import WelcomeModal from './components/WelcomeModal';
+import { 
+    SIMULATION_TICK_RATE_MS, 
+    DAYS_PER_TICK,
+    FOLLOWER_GROWTH_RATE_MIN,
+    FOLLOWER_GROWTH_RATE_MAX,
+    POPULARITY_INFLUENCE
+} from './constants';
 
-// Main App Component
 const App: React.FC = () => {
-    // State management
-    const [user, setUser] = useState<{ username: string } | null>(null);
+    // State
     const [userData, setUserData] = useState<UserData | null>(null);
-    const [currentPage, setCurrentPage] = useState<Page>('home');
     const [artists, setArtists] = useState<Record<string, Artist>>({});
+    const [currentPage, setCurrentPage] = useState<Page>('home');
     const [isLoading, setIsLoading] = useState(true);
     
-    // Modal states
+    // Modals state
     const [investModalArtist, setInvestModalArtist] = useState<Artist | null>(null);
     const [sellModalItem, setSellModalItem] = useState<PortfolioItem | null>(null);
     const [detailArtist, setDetailArtist] = useState<Artist | null>(null);
     const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
-    // Market data state
-    const [marketMovers, setMarketMovers] = useState<{ gainers: MarketMover[], losers: MarketMover[] }>({ gainers: [], losers: [] });
-    const [mostTraded, setMostTraded] = useState<MostTraded[]>([]);
-    const [netWorthChange, setNetWorthChange] = useState(0);
+    const allUserData = useMemo(() => getAllUserData(), [userData]);
 
+    // Handlers
+    const handleSignIn = (username: string) => {
+        const { userData: loadedUserData, isNewUser } = signIn(username);
+        setUserData(loadedUserData);
+        setCurrentPage('home');
+        if (isNewUser && !loadedUserData.hasSeenWelcome) {
+            setShowWelcomeModal(true);
+        }
+    };
 
-    // --- UTILITY & CALCULATION FUNCTIONS ---
+    const handleSignOut = () => {
+        signOut();
+        setUserData(null);
+    };
 
-    const calculateCurrentValue = useCallback((investment: Investment, currentFollowers: number): number => {
-        if (investment.initialFollowers === 0) return investment.initialInvestment;
-        const growth = (currentFollowers - investment.initialFollowers) / investment.initialFollowers;
-        return investment.initialInvestment * (1 + growth);
+    const handleNavigate = (page: Page) => {
+        setCurrentPage(page);
+    };
+    
+    // Main simulation tick logic
+    const runSimulationTick = useCallback(() => {
+        let allUsers = getAllUserData();
+        const allInvestedArtistIds = Array.from(new Set(Object.values(allUsers).flatMap(u => u.investments.map(i => i.artistId))));
+
+        let updatedArtistsData: Record<string, Artist> = {};
+        
+        allInvestedArtistIds.forEach(artistId => {
+            const artist = artists[artistId];
+            if (artist) {
+                const baseGrowth = FOLLOWER_GROWTH_RATE_MIN + (Math.random() * (FOLLOWER_GROWTH_RATE_MAX - FOLLOWER_GROWTH_RATE_MIN));
+                const popularityBonus = (artist.popularity / 100) * POPULARITY_INFLUENCE;
+                const dailyGrowthRate = baseGrowth + popularityBonus;
+                const followerIncrease = Math.floor(artist.followers * dailyGrowthRate * DAYS_PER_TICK);
+                
+                const newFollowers = artist.followers + followerIncrease;
+
+                updatedArtistsData[artistId] = {
+                    ...artist,
+                    followers: newFollowers,
+                    followerHistory: [
+                        ...artist.followerHistory.slice(-29), // keep last 30 points
+                        { date: Date.now(), count: newFollowers }
+                    ]
+                };
+            }
+        });
+
+        // Update artists state
+        setArtists(prevArtists => ({ ...prevArtists, ...updatedArtistsData }));
+
+        // Update all users data
+        Object.keys(allUsers).forEach(username => {
+            const user = allUsers[username];
+            
+            const calculateCurrentValue = (investment: Investment): number => {
+                const artist = updatedArtistsData[investment.artistId] || artists[investment.artistId];
+                if (!artist || investment.initialFollowers === 0) return investment.initialInvestment;
+                return investment.initialInvestment * (artist.followers / investment.initialFollowers);
+            };
+
+            const portfolioValue = user.investments.reduce((sum, inv) => sum + calculateCurrentValue(inv), 0);
+            const newNetWorth = user.credits + portfolioValue;
+
+            const updatedUser: UserData = {
+                ...user,
+                simulatedDays: user.simulatedDays + DAYS_PER_TICK,
+                lastTickDate: Date.now(),
+                netWorthHistory: [
+                    ...user.netWorthHistory.slice(-29),
+                    { date: Date.now(), netWorth: newNetWorth }
+                ]
+            };
+            allUsers[username] = updatedUser;
+        });
+        
+        saveAllUserData(allUsers);
+        
+        // Update current user's data if they are logged in
+        if (userData && allUsers[userData.username]) {
+            setUserData(allUsers[userData.username]);
+        }
+    }, [userData, artists]);
+
+    // Effect for simulation tick
+    useEffect(() => {
+        const tickInterval = setInterval(runSimulationTick, SIMULATION_TICK_RATE_MS);
+        return () => clearInterval(tickInterval);
+    }, [runSimulationTick]);
+
+    // Effect for initial load and fetching artist data
+    useEffect(() => {
+        const initialLoad = async () => {
+            setIsLoading(true);
+            const activeUser = loadUser();
+            if (activeUser) {
+                const { userData: loadedUserData } = signIn(activeUser.username);
+                setUserData(loadedUserData);
+            }
+
+            const allUsers = getAllUserData();
+            const allArtistIds = Array.from(new Set(Object.values(allUsers).flatMap(u => u.investments.map(i => i.artistId))));
+
+            if (allArtistIds.length > 0) {
+                try {
+                    const fetchedArtists: SpotifyArtist[] = await getMultipleArtistsByIds(allArtistIds);
+                    const artistsMap: Record<string, Artist> = fetchedArtists.reduce((acc, spotifyArtist) => {
+                        const existingUserInvestments = Object.values(allUsers).flatMap(u => u.investments).filter(i => i.artistId === spotifyArtist.id);
+                        // A simple way to get some history if none exists.
+                        const history = existingUserInvestments.length > 0 ? [{date: existingUserInvestments[0].timestamp, count: existingUserInvestments[0].initialFollowers}, { date: Date.now(), count: spotifyArtist.followers }] : [{ date: Date.now(), count: spotifyArtist.followers }];
+                        acc[spotifyArtist.id] = { ...spotifyArtist, followerHistory: history };
+                        return acc;
+                    }, {} as Record<string, Artist>);
+                    
+                    // We need to merge this with any artists already in state from a previous tick, just in case
+                    setArtists(prev => ({...prev, ...artistsMap}));
+                } catch (error) {
+                    console.error("Failed to fetch initial artist data", error);
+                }
+            }
+            setIsLoading(false);
+        };
+        initialLoad();
     }, []);
 
     const portfolioItems = useMemo((): PortfolioItem[] => {
         if (!userData) return [];
 
         const items: Record<string, PortfolioItem> = {};
+
         userData.investments.forEach(investment => {
             const artist = artists[investment.artistId];
             if (!artist) return;
 
-            const currentValue = calculateCurrentValue(investment, artist.followers);
-
             if (!items[artist.id]) {
                 items[artist.id] = {
-                    artist,
+                    artist: artist,
                     investments: [],
                     totalInvestment: 0,
                     currentValue: 0,
                     profitOrLoss: 0,
-                    profitOrLossPercentage: 0,
+                    profitOrLossPercentage: 0
                 };
             }
 
-            items[artist.id].investments.push(investment);
-            items[artist.id].totalInvestment += investment.initialInvestment;
-            items[artist.id].currentValue += currentValue;
+            const investmentValue = (investment.initialFollowers > 0) 
+                ? investment.initialInvestment * (artist.followers / investment.initialFollowers) 
+                : investment.initialInvestment;
+            
+            const currentItem = items[artist.id];
+            currentItem.investments.push(investment);
+            currentItem.totalInvestment += investment.initialInvestment;
+            currentItem.currentValue += investmentValue;
         });
 
         return Object.values(items).map(item => {
-            const profitOrLoss = item.currentValue - item.totalInvestment;
-            const profitOrLossPercentage = item.totalInvestment > 0 ? (profitOrLoss / item.totalInvestment) * 100 : 0;
-            return { ...item, profitOrLoss, profitOrLossPercentage };
+            item.profitOrLoss = item.currentValue - item.totalInvestment;
+            item.profitOrLossPercentage = item.totalInvestment > 0 ? (item.profitOrLoss / item.totalInvestment) * 100 : 0;
+            return item;
         });
-    }, [userData, artists, calculateCurrentValue]);
+    }, [userData, artists]);
 
     const netWorth = useMemo(() => {
         if (!userData) return 0;
-        const holdingsValue = portfolioItems.reduce((sum, item) => sum + item.currentValue, 0);
-        return userData.credits + holdingsValue;
+        const portfolioValue = portfolioItems.reduce((sum, item) => sum + item.currentValue, 0);
+        return userData.credits + portfolioValue;
     }, [userData, portfolioItems]);
-
-    // --- ACTION HANDLERS ---
-    const handleViewDetail = useCallback(async (artistId: string) => {
-        const existingArtist = artists[artistId];
-        if (existingArtist) {
-            setDetailArtist(existingArtist);
-            return;
-        }
-
-        try {
-            const spotifyArtists = await getMultipleArtistsByIds([artistId]);
-            if (spotifyArtists.length > 0) {
-                const newArtistData = spotifyArtists[0];
-                const newArtist: Artist = {
-                    ...newArtistData,
-                    followerHistory: [{ date: Date.now(), count: newArtistData.followers }],
-                };
-                // Add to central state to avoid re-fetching and to make it available for simulation
-                setArtists(prev => ({...prev, [newArtist.id]: newArtist}));
-                setDetailArtist(newArtist);
-            } else {
-                setDetailArtist(null); // Artist not found by ID
-            }
-        } catch (error) {
-            console.error("Failed to fetch artist details for detail view:", error);
-            setDetailArtist(null);
-        }
-    }, [artists]);
-
-
-    // --- DATA FETCHING & INITIALIZATION ---
-
-    const fetchAndUpdateArtists = useCallback(async (artistIds: string[]) => {
-        if (artistIds.length === 0) return;
-        try {
-            const spotifyArtists = await getMultipleArtistsByIds(artistIds);
-            setArtists(prev => {
-                const newArtists = { ...prev };
-                spotifyArtists.forEach(sa => {
-                    const existing = prev[sa.id] || { followerHistory: [] };
-                    newArtists[sa.id] = { ...existing, ...sa };
-                });
-                return newArtists;
-            });
-        } catch (error) {
-            console.error("Failed to fetch artist data:", error);
-        }
-    }, []);
-
-    // Load user and initial data
-    useEffect(() => {
-        const activeUser = loadUser();
-        if (activeUser) {
-            const { userData: loadedUserData, isNewUser } = signIn(activeUser.username);
-            setUser(activeUser);
-            setUserData(loadedUserData);
-            if (isNewUser && !loadedUserData.hasSeenWelcome) {
-                setShowWelcomeModal(true);
-            }
-        }
-        setIsLoading(false);
-    }, []);
-    
-    // Fetch artist data when user data changes
-    useEffect(() => {
-        if (userData) {
-            const artistIds = [...new Set(userData.investments.map(inv => inv.artistId))];
-            fetchAndUpdateArtists(artistIds);
-        }
-    }, [userData, fetchAndUpdateArtists]);
-
-    // --- GAME SIMULATION LOGIC ---
-
-    useEffect(() => {
-        if (!user || !userData) return;
-        
-        const tick = () => {
-            const now = Date.now();
-            // Simulate artist follower growth
-            const updatedArtists = { ...artists };
-            let artistsChanged = false;
-            Object.values(updatedArtists).forEach(artist => {
-                const growthFactor = (FOLLOWER_GROWTH_RATE_MIN + Math.random() * (FOLLOWER_GROWTH_RATE_MAX - FOLLOWER_GROWTH_RATE_MIN)) 
-                                   + (artist.popularity / 100) * POPULARITY_INFLUENCE;
-                
-                const newFollowers = Math.floor(artist.followers * (1 + growthFactor * DAYS_PER_TICK));
-                
-                if (newFollowers > artist.followers) {
-                    artistsChanged = true;
-                    const newHistoryPoint: FollowerHistoryPoint = { date: now, count: newFollowers };
-                    artist.followers = newFollowers;
-                    artist.followerHistory = [...artist.followerHistory, newHistoryPoint].slice(-30); // Keep last 30 points
-                }
-            });
-
-            if (artistsChanged) {
-                setArtists(updatedArtists);
-            }
-            
-            // Update user data for simulation days and net worth history
-            setUserData(prev => {
-                if (!prev) return null;
-                const newSimulatedDays = prev.simulatedDays + DAYS_PER_TICK;
-                const lastHistory = prev.netWorthHistory[prev.netWorthHistory.length - 1];
-                const newNetWorthHistory = [...prev.netWorthHistory];
-
-                // Add new history point if it's a new "day" in the history
-                if (!lastHistory || new Date(lastHistory.date).toDateString() !== new Date(now).toDateString()) {
-                     newNetWorthHistory.push({ date: now, netWorth });
-                } else {
-                     lastHistory.netWorth = netWorth; // Update today's net worth
-                }
-
-                return {
-                    ...prev,
-                    simulatedDays: newSimulatedDays,
-                    netWorthHistory: newNetWorthHistory.slice(-30), // Keep last 30 points
-                    lastTickDate: now,
-                };
-            });
-        };
-
-        const intervalId = setInterval(tick, SIMULATION_TICK_RATE_MS);
-        return () => clearInterval(intervalId);
-    }, [user, userData, artists, netWorth]);
-    
-    // Save all user data to local storage on change
-    useEffect(() => {
-        if (userData) {
-            const allData = getAllUserData();
-            saveAllUserData({ ...allData, [userData.username]: userData });
-        }
-    }, [userData]);
-
-
-    // --- USER ACTIONS ---
-
-    const handleSignIn = (username: string) => {
-        const { userData: newUserData, isNewUser } = signIn(username);
-        setUser({ username });
-        setUserData(newUserData);
-        if (isNewUser && !newUserData.hasSeenWelcome) {
-            setShowWelcomeModal(true);
-        }
-    };
-    
-    const handleSignOut = () => {
-        signOut();
-        setUser(null);
-        setUserData(null);
-        setCurrentPage('home');
-    };
 
     const handleInvest = (artist: Artist, amount: number) => {
         if (!userData || userData.credits < amount) return;
 
         const newInvestment: Investment = {
-            id: `inv_${Date.now()}`,
+            id: `inv_${Date.now()}_${Math.random()}`,
             artistId: artist.id,
             initialInvestment: amount,
             initialFollowers: artist.followers,
-            timestamp: Date.now(),
+            timestamp: Date.now()
         };
-
+        
         const newTransaction: Transaction = {
-            id: `tx_${Date.now()}`,
+            id: `txn_${Date.now()}_${Math.random()}`,
             type: 'invest',
-            artistName: artist.name,
             artistId: artist.id,
+            artistName: artist.name,
             amount: amount,
-            timestamp: Date.now(),
+            timestamp: Date.now()
         };
 
-        setUserData(prev => prev && ({
-            ...prev,
-            credits: prev.credits - amount,
-            investments: [...prev.investments, newInvestment],
-            transactions: [newTransaction, ...prev.transactions],
-        }));
+        const updatedUserData: UserData = {
+            ...userData,
+            credits: userData.credits - amount,
+            investments: [...userData.investments, newInvestment],
+            transactions: [newTransaction, ...userData.transactions],
+        };
 
-        // Add artist to tracked artists if not already there
+        setUserData(updatedUserData);
+
         if (!artists[artist.id]) {
-            setArtists(prev => ({ ...prev, [artist.id]: { ...artist, followerHistory: [{ date: Date.now(), count: artist.followers }] }}));
+            setArtists(prev => ({ ...prev, [artist.id]: { ...artist, followerHistory: [{date: Date.now(), count: artist.followers}] } }));
         }
+
+        const allUsers = getAllUserData();
+        saveAllUserData({ ...allUsers, [userData.username]: updatedUserData });
         
         setInvestModalArtist(null);
     };
 
-    const handleSell = (item: PortfolioItem, amountToSell: number) => {
-        if (!userData) return;
+    const handleSell = (item: PortfolioItem, sellAmount: number) => {
+        if (!userData || item.currentValue < sellAmount || sellAmount <= 0) return;
 
-        const percentageToSell = amountToSell / item.currentValue;
-        if (percentageToSell > 1) return;
-
+        const sellRatio = sellAmount / item.currentValue;
         let remainingInvestments: Investment[] = [];
-        let totalRefundedInvestment = 0;
-
-        // Reduce or remove investments proportionally
-        userData.investments.forEach(inv => {
-            if (inv.artistId !== item.artist.id) {
-                remainingInvestments.push(inv);
-            } else {
-                totalRefundedInvestment += inv.initialInvestment * percentageToSell;
-                const remainingInitialInvestment = inv.initialInvestment * (1 - percentageToSell);
-                if (remainingInitialInvestment > 1) { // Threshold to avoid tiny dust investments
-                    remainingInvestments.push({ ...inv, initialInvestment: remainingInitialInvestment });
-                }
+        
+        item.investments.forEach(inv => {
+            if (sellRatio < 1) { // Partial sell
+                const remainingInitialInvestment = inv.initialInvestment * (1 - sellRatio);
+                remainingInvestments.push({ ...inv, initialInvestment: remainingInitialInvestment });
             }
         });
-
+        
         const newTransaction: Transaction = {
-            id: `tx_${Date.now()}`,
+            id: `txn_${Date.now()}_${Math.random()}`,
             type: 'sell',
-            artistName: item.artist.name,
             artistId: item.artist.id,
-            amount: amountToSell,
-            timestamp: Date.now(),
+            artistName: item.artist.name,
+            amount: sellAmount,
+            timestamp: Date.now()
         };
         
-        setUserData(prev => prev && ({
-            ...prev,
-            credits: prev.credits + amountToSell,
-            investments: remainingInvestments,
-            transactions: [newTransaction, ...prev.transactions],
-        }));
+        const otherInvestments = userData.investments.filter(inv => inv.artistId !== item.artist.id);
 
+        const updatedUserData: UserData = {
+            ...userData,
+            credits: userData.credits + sellAmount,
+            investments: [...otherInvestments, ...remainingInvestments],
+            transactions: [newTransaction, ...userData.transactions]
+        };
+
+        setUserData(updatedUserData);
+        const allUsers = getAllUserData();
+        saveAllUserData({ ...allUsers, [userData.username]: updatedUserData });
+        
         setSellModalItem(null);
-        setDetailArtist(null); // Close detail modal if open
+        setDetailArtist(null);
     };
-    
-    const handleCloseWelcome = () => {
-        setShowWelcomeModal(false);
-        if (userData) {
-            setUserData(prev => prev && ({ ...prev, hasSeenWelcome: true }));
+
+    const trackedArtists = useMemo(() => {
+        return portfolioItems.map(item => item.artist);
+    }, [portfolioItems]);
+
+    const handleViewDetail = (artistId: string) => {
+        const artist = artists[artistId];
+        if (artist) {
+            setDetailArtist(artist);
         }
     };
+    
+    const handleInvestFromDetail = (artist: Artist) => {
+        setDetailArtist(null);
+        setInvestModalArtist(artist);
+    };
 
+    const handleSellFromDetail = () => {
+        if (detailArtist) {
+            const item = portfolioItems.find(p => p.artist.id === detailArtist.id);
+            if(item) {
+                setDetailArtist(null);
+                setSellModalItem(item);
+            }
+        }
+    };
+    
+    const homePageData = useMemo(() => {
+        if (!userData) return { netWorthChange: 0, marketMovers: { gainers: [], losers: []}, mostTraded: [] };
 
-    // --- RENDER LOGIC ---
+        const lastKnownNetWorth = userData.netWorthHistory.length > 1 ? userData.netWorthHistory[userData.netWorthHistory.length - 2].netWorth : (userData.netWorthHistory[0]?.netWorth ?? 0);
+        const netWorthChange = netWorth - lastKnownNetWorth;
 
+        const allTrackedArtists = Object.values(artists).filter(a => a.followerHistory.length > 1);
+        const movers: MarketMover[] = allTrackedArtists.map(a => {
+            const start = a.followerHistory[0].count;
+            const end = a.followers;
+            const change = start > 0 ? ((end - start) / start) * 100 : 0;
+            return { artist: a, change };
+        }).sort((a,b) => Math.abs(b.change) - Math.abs(a.change));
+
+        const marketMovers = {
+            gainers: movers.filter(m => m.change > 0.01).slice(0, 5),
+            losers: movers.filter(m => m.change < -0.01).slice(0, 5),
+        };
+        
+        const lastLoginTimestamp = userData.lastTickDate ?? 0;
+        const allTransactions = Object.values(allUserData).flatMap(u => u.transactions);
+        const recentGlobalTransactions = allTransactions.filter(t => t.timestamp > lastLoginTimestamp);
+        const tradeCounts: Record<string, { artistId: string, buys: number, sells: number }> = {};
+        recentGlobalTransactions.forEach(tx => {
+            if (!tradeCounts[tx.artistId]) tradeCounts[tx.artistId] = { artistId: tx.artistId, buys: 0, sells: 0 };
+            if (tx.type === 'invest') tradeCounts[tx.artistId].buys += tx.amount;
+            else if (tx.type === 'sell') tradeCounts[tx.artistId].sells += tx.amount;
+        });
+
+        const mostTraded: MostTraded[] = Object.values(tradeCounts).map(counts => ({
+            artist: artists[counts.artistId],
+            buys: counts.buys,
+            sells: counts.sells,
+        }))
+        .filter(item => item.artist)
+        .sort((a,b) => (b.buys + b.sells) - (a.buys + a.sells))
+        .slice(0, 5);
+        
+        return { netWorthChange, marketMovers, mostTraded };
+
+    }, [userData, netWorth, artists, allUserData]);
+
+    // Component Rendering
     if (isLoading) {
-        return <div className="bg-gray-900 min-h-screen"></div>; // Or a proper loading spinner
+        return <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white">Loading Stockify...</div>;
     }
 
-    if (!user || !userData) {
+    if (!userData) {
         return <LoginPage onSignIn={handleSignIn} />;
     }
 
-    const trackedArtists = Object.values(artists).filter(artist => 
-        userData.investments.some(inv => inv.artistId === artist.id)
-    );
-
-    const renderPage = () => {
-        switch (currentPage) {
-            case 'home':
-                return <HomePage 
-                          username={user.username} 
-                          netWorthChange={netWorthChange}
-                          marketMovers={marketMovers}
-                          mostTraded={mostTraded}
-                          onViewDetail={handleViewDetail}
-                        />;
-            case 'portfolio':
-                return <Portfolio 
-                          portfolioItems={portfolioItems}
-                          netWorth={netWorth}
-                          netWorthHistory={userData.netWorthHistory}
-                          onViewDetail={handleViewDetail}
-                          onSellClick={setSellModalItem}
-                        />;
-            case 'trade':
-                return <TradePage 
-                          onInvest={setInvestModalArtist}
-                          trackedArtists={trackedArtists}
-                          transactions={userData.transactions}
-                          onViewDetail={handleViewDetail}
-                        />;
-            case 'leaderboard':
-                return <LeaderboardPage />;
-            case 'faq':
-                return <FAQPage />;
-            default:
-                return <div>Page not found</div>;
-        }
-    };
-
     return (
-        <div className="bg-gray-900 text-gray-100 min-h-screen font-sans bg-cover bg-fixed" style={{backgroundImage: "url('/background.svg')"}}>
+        <div className="bg-gray-900 text-white min-h-screen font-sans bg-grid">
             <Header
                 currentPage={currentPage}
-                onNavigate={setCurrentPage}
-                username={user.username}
+                onNavigate={handleNavigate}
+                username={userData.username}
                 userCredits={userData.credits}
                 onSignOut={handleSignOut}
                 simulationStartDate={userData.simulationStartDate}
                 simulatedDays={userData.simulatedDays}
             />
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
-                {renderPage()}
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+                {currentPage === 'home' && (
+                    <HomePage 
+                        username={userData.username}
+                        netWorthChange={homePageData.netWorthChange}
+                        marketMovers={homePageData.marketMovers}
+                        mostTraded={homePageData.mostTraded}
+                        onViewDetail={handleViewDetail}
+                    />
+                )}
+                {currentPage === 'portfolio' && (
+                    <Portfolio 
+                        portfolioItems={portfolioItems} 
+                        netWorth={netWorth}
+                        netWorthHistory={userData.netWorthHistory}
+                        onViewDetail={handleViewDetail}
+                        onSellClick={setSellModalItem}
+                    />
+                )}
+                {currentPage === 'trade' && (
+                    <TradePage 
+                        onInvest={setInvestModalArtist}
+                        onViewDetail={handleViewDetail}
+                        trackedArtists={trackedArtists}
+                        transactions={userData.transactions}
+                    />
+                )}
+                {currentPage === 'leaderboard' && <LeaderboardPage />}
+                {currentPage === 'faq' && <FAQPage />}
             </main>
-
+            
             {investModalArtist && (
-                <InvestmentModal
-                    artist={investModalArtist}
+                <InvestmentModal 
+                    artist={investModalArtist} 
                     userCredits={userData.credits}
                     onInvest={handleInvest}
                     onClose={() => setInvestModalArtist(null)}
                 />
             )}
-            
+
             {sellModalItem && (
                 <SellModal
                     portfolioItem={sellModalItem}
@@ -411,22 +426,35 @@ const App: React.FC = () => {
                     onClose={() => setSellModalItem(null)}
                 />
             )}
-
+            
             {detailArtist && (
-                 <ArtistDetailPage
+                <ArtistDetailPage
                     artist={detailArtist}
-                    investments={userData.investments}
+                    investments={userData.investments.filter(i => i.artistId === detailArtist.id)}
                     onClose={() => setDetailArtist(null)}
-                    onInvest={setInvestModalArtist}
-                    onSell={() => {
-                        const item = portfolioItems.find(p => p.artist.id === detailArtist.id);
-                        if (item) setSellModalItem(item);
-                    }}
-                 />
+                    onInvest={handleInvestFromDetail}
+                    onSell={handleSellFromDetail}
+                />
             )}
 
             {showWelcomeModal && (
-                <WelcomeModal onClose={handleCloseWelcome} onNavigateToFaq={() => setCurrentPage('faq')} />
+                <WelcomeModal 
+                    onClose={() => {
+                        setShowWelcomeModal(false);
+                        const updatedUser = { ...userData, hasSeenWelcome: true };
+                        setUserData(updatedUser);
+                        const allUsers = getAllUserData();
+                        saveAllUserData({ ...allUsers, [userData.username]: updatedUser });
+                    }}
+                    onNavigateToFaq={() => {
+                         setShowWelcomeModal(false);
+                         setCurrentPage('faq');
+                         const updatedUser = { ...userData, hasSeenWelcome: true };
+                         setUserData(updatedUser);
+                         const allUsers = getAllUserData();
+                         saveAllUserData({ ...allUsers, [userData.username]: updatedUser });
+                    }}
+                />
             )}
         </div>
     );
