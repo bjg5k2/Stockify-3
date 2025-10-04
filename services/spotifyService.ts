@@ -3,34 +3,53 @@ import { SpotifyArtist } from '../types';
 const API_BASE = 'https://api.spotify.com/v1';
 const MAX_ARTISTS_PER_SEARCH = 10;
 
+// --- FOR BROWSER PREVIEW ONLY ---
+// Replace these placeholder strings with your actual Spotify credentials.
+// WARNING: DO NOT COMMIT THESE KEYS TO A PUBLIC GITHUB REPOSITORY.
+const DEV_CLIENT_ID = "6779002148504051a70094608246c2ce";
+const DEV_CLIENT_SECRET = "37858ad8a21b48bc99fad3845826ba1a";
+
+
 let accessToken: string | null = null;
 let tokenExpiryTime: number = 0;
 
-// Function to get an access token from our secure Netlify serverless function
+// Function to get an access token
 const getAccessToken = async (): Promise<string> => {
     if (accessToken && Date.now() < tokenExpiryTime) {
         return accessToken;
     }
 
+    if (!DEV_CLIENT_ID || !DEV_CLIENT_SECRET) {
+        throw new Error("Spotify credentials are not set in services/spotifyService.ts. Please add your client ID and secret.");
+    }
+
     try {
-        // This endpoint points to our Netlify function
-        const response = await fetch('/.netlify/functions/spotify-token');
+        // btoa is a browser-native function for Base64 encoding
+        const authString = btoa(`${DEV_CLIENT_ID}:${DEV_CLIENT_SECRET}`);
+
+        const response = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Authorization': `Basic ${authString}`,
+            },
+            body: 'grant_type=client_credentials',
+        });
 
         if (!response.ok) {
-             const errorBody = await response.json();
-             console.error("Spotify token function error:", errorBody);
-             throw new Error(`Token request failed: ${errorBody.error || response.statusText}. Ensure the Netlify dev server is running and configured.`);
+             const errorBody = await response.text();
+             console.error("Direct Spotify API error:", errorBody);
+             throw new Error(`Direct token request failed with status: ${response.status}. Check credentials in spotifyService.ts.`);
         }
         
         const data = await response.json();
         accessToken = data.access_token;
-        // Set expiry time to 5 minutes before the actual expiry to be safe
         tokenExpiryTime = Date.now() + (data.expires_in - 300) * 1000;
         return accessToken!;
 
     } catch (error) {
-        console.error('Error fetching Spotify token:', error);
-        throw new Error('Could not authenticate with Spotify via the backend service. It might be down or misconfigured.');
+        console.error('Error fetching Spotify token directly:', error);
+        throw new Error('Could not authenticate with Spotify using the provided credentials. Please ensure they are correct in services/spotifyService.ts.');
     }
 };
 
@@ -67,9 +86,7 @@ export const searchArtists = async (query: string): Promise<SpotifyArtist[]> => 
 
 export const getMultipleArtistsByIds = async (artistIds: string[]): Promise<SpotifyArtist[]> => {
     if (artistIds.length === 0) return [];
-    // Spotify API has a limit of 50 artists per request
     if (artistIds.length > 50) {
-        console.warn("Attempted to fetch more than 50 artists at once. Truncating to 50.");
         artistIds = artistIds.slice(0, 50);
     }
     const token = await getAccessToken();

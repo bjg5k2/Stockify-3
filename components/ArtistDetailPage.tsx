@@ -15,6 +15,8 @@ const ArtistDetailPage: React.FC<ArtistDetailPageProps> = ({ artist, investments
     const history = artist.followerHistory;
     const followerChange = history.length > 1 ? history[history.length - 1].count - history[0].count : 0;
     const isGrowth = followerChange >= 0;
+
+    const artistInvestments = investments.filter(inv => inv.artistId === artist.id);
     
     const calculateCurrentValue = (investment: Investment) => {
         if (investment.initialFollowers === 0) return investment.initialInvestment;
@@ -22,8 +24,8 @@ const ArtistDetailPage: React.FC<ArtistDetailPageProps> = ({ artist, investments
         return investment.initialInvestment * (1 + growth);
     };
     
-    const totalHoldingsValue = investments.reduce((sum, inv) => sum + calculateCurrentValue(inv), 0);
-    const totalInvestment = investments.reduce((sum, inv) => sum + inv.initialInvestment, 0);
+    const totalHoldingsValue = artistInvestments.reduce((sum, inv) => sum + calculateCurrentValue(inv), 0);
+    const totalInvestment = artistInvestments.reduce((sum, inv) => sum + inv.initialInvestment, 0);
 
     const formatCurrency = (amount: number) => {
         return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).replace('$', 'C ')
@@ -61,7 +63,7 @@ const ArtistDetailPage: React.FC<ArtistDetailPageProps> = ({ artist, investments
                 </div>
                 <div>
                     <h3 className="text-lg font-semibold text-gray-200 mb-2">Your Position</h3>
-                     {investments.length > 0 ? (
+                     {artistInvestments.length > 0 ? (
                         <div className="grid grid-cols-2 gap-4 text-center bg-gray-800/50 p-4 rounded-lg">
                             <div>
                                 <p className="text-xs text-gray-400 uppercase">Total Invested</p>
@@ -85,7 +87,7 @@ const ArtistDetailPage: React.FC<ArtistDetailPageProps> = ({ artist, investments
                     </button>
                      <button
                         onClick={onSell}
-                        disabled={investments.length === 0}
+                        disabled={artistInvestments.length === 0}
                         className="w-full bg-gradient-to-r from-red-500 to-rose-500 text-white font-bold py-3 px-4 rounded-lg hover:from-red-600 hover:to-rose-600 transition-all duration-300 transform hover:scale-[1.02] shadow-lg hover:shadow-red-500/20 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed disabled:shadow-none disabled:scale-100"
                     >
                         Sell Holdings

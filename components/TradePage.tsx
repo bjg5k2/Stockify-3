@@ -1,7 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-// Fix: Import SpotifyArtist to use in props
-import { Artist, Transaction, SpotifyArtist } from '../types';
+import { Artist, Transaction } from '../types';
 import { searchArtists } from '../services/spotifyService';
 import ArtistList from './ArtistList';
 import TransactionItem from './TransactionItem';
@@ -10,13 +8,11 @@ import { SearchIcon } from './icons';
 interface TradePageProps {
   onInvest: (artist: Artist) => void;
   onViewDetail: (artistId: string) => void;
-  // Fix: Renamed prop to marketArtists and added onUpsertArtist
-  marketArtists: Artist[];
+  trackedArtists: Artist[];
   transactions: Transaction[];
-  onUpsertArtist: (newArtists: SpotifyArtist[]) => void;
 }
 
-const TradePage: React.FC<TradePageProps> = ({ onInvest, onViewDetail, marketArtists, transactions, onUpsertArtist }) => {
+const TradePage: React.FC<TradePageProps> = ({ onInvest, onViewDetail, trackedArtists, transactions }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
   const [searchResults, setSearchResults] = useState<Artist[]>([]);
@@ -47,8 +43,6 @@ const TradePage: React.FC<TradePageProps> = ({ onInvest, onViewDetail, marketArt
       setError(null);
       try {
         const results = await searchArtists(debouncedQuery);
-        // Fix: Call onUpsertArtist to add new artists to the simulation
-        onUpsertArtist(results);
         // Spotify API returns SpotifyArtist, we map to Artist for our app components
         const artists: Artist[] = results.map(spotifyArtist => ({
             ...spotifyArtist,
@@ -64,11 +58,11 @@ const TradePage: React.FC<TradePageProps> = ({ onInvest, onViewDetail, marketArt
     };
 
     performSearch();
-  }, [debouncedQuery, onUpsertArtist]);
+  }, [debouncedQuery]);
 
   const recentTransactions = transactions.slice(0, 10);
   // If user is searching, show search results. Otherwise, show their tracked artists.
-  const displayArtists = searchQuery ? searchResults : marketArtists;
+  const displayArtists = searchQuery ? searchResults : trackedArtists;
   
   return (
     <div className="animate-fade-in-up grid grid-cols-1 lg:grid-cols-3 gap-8">

@@ -1,30 +1,81 @@
-const USER_KEY = 'stockify_username';
+// Fix: Provide content for the services/authService.ts file.
 
-export const saveUsername = (username: string): void => {
-  try {
-    localStorage.setItem(USER_KEY, username);
-  } catch (error) {
-    console.error("Could not save username to localStorage", error);
-  }
+import { UserData } from "../types";
+import { STARTING_CREDITS } from "../constants";
+
+const ACTIVE_USER_KEY = 'stockify_active_user';
+const ALL_USERS_KEY = 'stockify_all_users';
+
+export const saveUser = (username: string): void => {
+    try {
+        localStorage.setItem(ACTIVE_USER_KEY, JSON.stringify({ username }));
+    } catch (error) {
+        console.error("Failed to save active user to local storage", error);
+    }
 };
 
-export const getUsername = (): string | null => {
-  try {
-    return localStorage.getItem(USER_KEY);
-  } catch (error) {
-    console.error("Could not retrieve username from localStorage", error);
-    return null;
-  }
+export const loadUser = (): { username: string } | null => {
+    try {
+        const userJson = localStorage.getItem(ACTIVE_USER_KEY);
+        if (userJson) {
+            return JSON.parse(userJson);
+        }
+        return null;
+    } catch (error) {
+        console.error("Failed to load active user from local storage", error);
+        return null;
+    }
 };
 
 export const signOut = (): void => {
-  try {
-    localStorage.removeItem(USER_KEY);
-    // Also clear other game-related data if necessary
-    localStorage.removeItem('stockify_user_data');
-    localStorage.removeItem('stockify_artists_data');
+    try {
+        localStorage.removeItem(ACTIVE_USER_KEY);
+    } catch (error) {
+        console.error("Failed to remove active user from local storage", error);
+    }
+};
 
-  } catch (error) {
-    console.error("Could not sign out user from localStorage", error);
-  }
+export const getAllUserData = (): Record<string, UserData> => {
+    try {
+        const allUsersJson = localStorage.getItem(ALL_USERS_KEY);
+        return allUsersJson ? JSON.parse(allUsersJson) : {};
+    } catch (error) {
+        console.error("Failed to load all user data", error);
+        return {};
+    }
+};
+
+export const saveAllUserData = (allData: Record<string, UserData>): void => {
+    try {
+        localStorage.setItem(ALL_USERS_KEY, JSON.stringify(allData));
+    } catch (error) {
+        console.error("Failed to save all user data", error);
+    }
+}
+
+
+export const signIn = (username: string): { userData: UserData, isNewUser: boolean } => {
+    const allData = getAllUserData();
+    let userData = allData[username];
+    let isNewUser = false;
+    
+    if (!userData) {
+      isNewUser = true;
+      userData = {
+        username: username,
+        credits: STARTING_CREDITS,
+        investments: [],
+        transactions: [],
+        netWorthHistory: [{ date: Date.now(), netWorth: STARTING_CREDITS }],
+        simulationStartDate: Date.now(),
+        simulatedDays: 0,
+        hasSeenWelcome: false,
+        lastTickDate: Date.now(), // Ensure new users have a tick date
+      };
+    }
+    
+    saveUser(username);
+    saveAllUserData({ ...allData, [username]: userData });
+    
+    return { userData, isNewUser };
 };

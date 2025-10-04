@@ -1,6 +1,11 @@
+// Fix: Provide content for the types.ts file to define the application's data structures.
 export type Page = 'home' | 'portfolio' | 'trade' | 'leaderboard' | 'faq';
 
-// Data from Spotify API
+export interface FollowerHistoryPoint {
+  date: number; // timestamp
+  count: number;
+}
+
 export interface SpotifyArtist {
   id: string;
   name: string;
@@ -9,25 +14,18 @@ export interface SpotifyArtist {
   popularity: number;
 }
 
-export interface FollowerHistoryPoint {
-  date: number; // timestamp
-  count: number;
-}
-
-// Artist object used within the simulation
 export interface Artist extends SpotifyArtist {
   followerHistory: FollowerHistoryPoint[];
 }
 
 export interface Investment {
-  id: string; // unique id for the investment
+  id: string;
   artistId: string;
   initialInvestment: number;
   initialFollowers: number;
   timestamp: number;
 }
 
-// An item in the user's portfolio, aggregating all investments for a single artist
 export interface PortfolioItem {
   artist: Artist;
   investments: Investment[];
@@ -37,49 +35,39 @@ export interface PortfolioItem {
   profitOrLossPercentage: number;
 }
 
-export type TransactionType = 'invest' | 'sell';
-
 export interface Transaction {
   id: string;
-  type: TransactionType;
-  artistId: string;
+  type: 'invest' | 'sell';
   artistName: string;
+  artistId: string;
   amount: number;
   timestamp: number;
 }
 
 export interface NetWorthHistoryPoint {
-  date: number; // timestamp
-  netWorth: number;
+    date: number; // timestamp
+    netWorth: number;
 }
 
-export interface User {
-  id: string;
-  username: string;
-  credits: number;
-  investments: Investment[];
-  transactions: Transaction[];
-  netWorthHistory: NetWorthHistoryPoint[];
-  lastLogin: number; // timestamp
-  isNewUser: boolean;
+export interface UserData {
+    username: string;
+    credits: number;
+    investments: Investment[];
+    transactions: Transaction[];
+    netWorthHistory: NetWorthHistoryPoint[];
+    simulationStartDate: number;
+    simulatedDays: number;
+    hasSeenWelcome: boolean;
+    lastTickDate?: number; // Added for tracking session changes
 }
 
-// For homepage market movers
 export interface MarketMover {
     artist: Artist;
-    change: number; // Percentage change
+    change: number;
 }
 
-// For homepage most traded
 export interface MostTraded {
     artist: Artist;
     buys: number;
     sells: number;
-}
-
-// For leaderboard
-export interface LeaderboardEntry {
-  userId: string;
-  username: string;
-  netWorth: number;
 }
