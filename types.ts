@@ -1,31 +1,30 @@
-// types.ts
 
-// Represents a point in time for an artist's follower count.
+export type Page = 'home' | 'portfolio' | 'trade' | 'leaderboard' | 'faq';
+
 export interface FollowerHistoryPoint {
-  timestamp: number;
+  date: number; // timestamp
   count: number;
 }
 
-// Represents an artist within the Stockify market.
-export interface Artist {
-  id: string; // Spotify Artist ID
+export interface SpotifyArtist {
+  id: string;
   name: string;
   imageUrl: string;
   followers: number;
+  popularity: number; // 0-100
+}
+
+export interface Artist extends SpotifyArtist {
   followerHistory: FollowerHistoryPoint[];
 }
 
-// Represents a single investment made by a user in an artist.
 export interface Investment {
-  id: string; // Unique ID for the investment
   artistId: string;
-  userId: string;
-  initialInvestment: number; // The amount of credits invested
-  initialFollowers: number; // The follower count at the time of investment
-  timestamp: number; // When the investment was made
+  initialInvestment: number;
+  initialFollowers: number;
+  timestamp: number;
 }
 
-// A processed object representing a user's total holdings in a single artist.
 export interface PortfolioItem {
   artist: Artist;
   investments: Investment[];
@@ -35,19 +34,37 @@ export interface PortfolioItem {
   profitOrLossPercentage: number;
 }
 
-// Represents an artist as returned from the Spotify API search.
-export interface SpotifyArtist {
+export interface Transaction {
   id: string;
-  name: string;
-  imageUrl: string;
-  followers: number;
-}
-
-// Represents a point in time for a user's net worth.
-export interface NetWorthHistoryPoint {
+  type: 'invest' | 'sell';
+  artistId: string;
+  artistName: string;
+  amount: number;
   timestamp: number;
-  netWorth: number;
 }
 
-// Fix: Add a shared Page type for navigation.
-export type Page = 'home' | 'trade' | 'portfolio' | 'leaderboard' | 'artistDetail' | 'faq';
+export interface UserData {
+  username: string;
+  credits: number;
+  investments: Investment[];
+  transactions: Transaction[];
+  netWorthHistory: NetWorthHistoryPoint[];
+  lastLogin: number;
+  simulationStartDate: number;
+}
+
+export interface NetWorthHistoryPoint {
+    date: number; // timestamp
+    netWorth: number;
+}
+
+export interface MarketMover {
+    artist: Artist;
+    change: number; // percentage change
+}
+
+export interface MostTraded {
+    artist: Artist;
+    buys: number;
+    sells: number;
+}

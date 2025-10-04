@@ -1,37 +1,18 @@
-// constants.ts
-import { FollowerHistoryPoint } from './types';
+// The initial amount of credits a new user starts with.
+export const STARTING_CREDITS = 10000;
 
-// A static list of artist IDs to populate the market initially.
-// In a real app, this might come from a database or a curated API endpoint.
-// These are example Spotify Artist IDs.
-export const ARTIST_IDS_IN_MARKET: string[] = [
-    '246dkjvS1zLTtiykXe5h60', // Post Malone
-    '06HL4z0CvFAxyc27GXpf02', // Taylor Swift
-    '3TVXtAsR1Inumwj472S9r4', // Drake
-    '1Xyo4u8uXC1ZmMiI5vAnv9', // The Weeknd
-    '6eUKZXaKkcviH0Ku9w2n3V', // Ed Sheeran
-    '6qqNVTkY8uBg9cP3Jd7DAH', // Billie Eilish
-    '6M2wZ9GZgrQXHCFfjv46we', // Dua Lipa
-    '1uNFoZAHBGtllmzznpCI3s', // Justin Bieber
-    '66CXWjxzNUsdJxJ2JdwvnR', // Ariana Grande
-    '1McMsnEElThX1knmY4oliG', // Olivia Rodrigo
-    '6KImCVD70vtIoJWnq6nGn3', // Harry Styles
-    '4q3ewBCX7sLwd24euuV69X', // Bad Bunny
-];
+// The rate at which the simulation updates, in milliseconds.
+// e.g., 5000ms = 5 seconds
+export const SIMULATION_TICK_RATE_MS = 5000;
 
-// This is used for generating mock history data in App.tsx
-// It's a placeholder for what would be a more robust historical data system.
-export const generateRandomHistory = (currentFollowers: number): FollowerHistoryPoint[] => {
-    const history: FollowerHistoryPoint[] = [];
-    let lastFollowers = currentFollowers * (1 - (Math.random() * 0.1)); // Start 0-10% lower
-    const days = 30;
-    for (let i = 0; i < days; i++) {
-        // Create a trend + some noise
-        const trend = (currentFollowers - lastFollowers) / (days - i);
-        const noise = (Math.random() - 0.48) * 0.01 * lastFollowers;
-        lastFollowers += trend + noise;
-        history.push({ timestamp: Date.now() - (days - i) * 24 * 60 * 60 * 1000, count: Math.round(lastFollowers) });
-    }
-    history[history.length -1] = { timestamp: Date.now(), count: currentFollowers }; // Ensure last point is accurate
-    return history;
-};
+// How many "days" pass in the simulation per tick.
+export const DAYS_PER_TICK = 1;
+
+// The minimum daily follower growth rate for an artist (before popularity influence).
+export const FOLLOWER_GROWTH_RATE_MIN = 0.0001; // 0.01%
+
+// The maximum daily follower growth rate for an artist (before popularity influence).
+export const FOLLOWER_GROWTH_RATE_MAX = 0.001; // 0.1%
+
+// How much an artist's Spotify popularity score (0-100) influences their growth rate.
+export const POPULARITY_INFLUENCE = 0.0005; // 0.05% at 100 popularity

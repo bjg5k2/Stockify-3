@@ -36,9 +36,10 @@ interface PortfolioProps {
   netWorth: number;
   netWorthHistory: NetWorthHistoryPoint[];
   onViewDetail: (artistId: string) => void;
+  onSellClick: (item: PortfolioItemType) => void;
 }
 
-const Portfolio: React.FC<PortfolioProps> = ({ portfolioItems, netWorth, netWorthHistory, onViewDetail }) => {
+const Portfolio: React.FC<PortfolioProps> = ({ portfolioItems, netWorth, netWorthHistory, onViewDetail, onSellClick }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'currentValue', direction: 'desc' });
 
   const totalInvestment = portfolioItems.reduce((sum, item) => sum + item.totalInvestment, 0);
@@ -134,9 +135,9 @@ const Portfolio: React.FC<PortfolioProps> = ({ portfolioItems, netWorth, netWort
         </div>
 
         {sortedPortfolioItems.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {sortedPortfolioItems.map(item => (
-              <PortfolioItem key={item.artist.id} item={item} onViewDetail={onViewDetail} />
+              <PortfolioItem key={item.artist.id} item={item} onViewDetail={onViewDetail} onSellClick={onSellClick} />
             ))}
           </div>
         ) : (

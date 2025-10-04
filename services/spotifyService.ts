@@ -60,6 +60,7 @@ const mapToSpotifyArtist = (item: any): SpotifyArtist | null => {
         name: item.name,
         imageUrl: item.images?.[0]?.url || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=222&color=fff`,
         followers: item.followers.total,
+        popularity: item.popularity,
     }
 };
 

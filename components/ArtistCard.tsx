@@ -1,33 +1,42 @@
 import React from 'react';
 import { Artist } from '../types';
+import { StarIcon } from './icons';
 
 interface ArtistCardProps {
   artist: Artist;
-  onInvestClick: () => void;
-  onViewDetailClick: () => void;
+  onInvest: (artist: Artist) => void;
+  onViewDetail: (artistId: string) => void;
 }
 
-const ArtistCard: React.FC<ArtistCardProps> = ({ artist, onInvestClick, onViewDetailClick }) => {
+const ArtistCard: React.FC<ArtistCardProps> = ({ artist, onInvest, onViewDetail }) => {
+
   return (
     <div 
-      onClick={onViewDetailClick}
-      className="bg-gray-800/40 backdrop-blur-sm rounded-xl p-4 flex items-center space-x-4 transition-all duration-300 hover:bg-gray-700/60 hover:shadow-2xl hover:scale-[1.03] cursor-pointer group border border-gray-700/80 relative overflow-hidden"
+      onClick={() => onViewDetail(artist.id)}
+      className="bg-gray-800/40 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg transition-all duration-300 hover:shadow-emerald-500/10 hover:ring-2 hover:ring-emerald-500/50 flex flex-col group cursor-pointer"
     >
-      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-emerald-500/0 via-emerald-500/0 to-emerald-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-      <img src={artist.imageUrl} alt={artist.name} className="w-20 h-20 rounded-full object-cover shadow-lg border-2 border-gray-700/50 flex-shrink-0" />
-      <div className="flex-1 min-w-0">
-        <h3 className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors truncate">{artist.name}</h3>
-        <p className="text-sm text-gray-300">
-          {artist.followers.toLocaleString()} Followers
-        </p>
+      <div className="relative">
+        <img src={artist.imageUrl} alt={artist.name} className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300" />
+        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 to-transparent"></div>
+        <div className="absolute bottom-0 left-0 p-4 w-full">
+          <h3 className="text-xl font-bold text-white truncate">{artist.name}</h3>
+          <div className="flex justify-between items-baseline text-sm text-gray-300 mt-1">
+              <span>{artist.followers.toLocaleString()} Followers</span>
+              <span className="flex items-center font-semibold text-gray-300">
+                  <StarIcon className="w-4 h-4 mr-1 text-gray-300" />
+                  {artist.popularity}
+              </span>
+          </div>
+        </div>
       </div>
-      <div className="flex-shrink-0 z-10">
+      
+      <div className="p-4 flex-grow flex flex-col justify-end">
         <button
           onClick={(e) => {
-              e.stopPropagation();
-              onInvestClick();
+            e.stopPropagation(); // Prevent card's onClick from firing
+            onInvest(artist);
           }}
-          className="bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-600 transition-all duration-200 transform hover:scale-105 shadow-md hover:shadow-emerald-500/30"
+          className="w-full bg-emerald-500/80 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-lg transition-colors"
         >
           Invest
         </button>

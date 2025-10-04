@@ -1,27 +1,41 @@
 import React, { useMemo } from 'react';
+import { FollowerHistoryPoint } from '../types';
 
-interface ChartDataPoint {
-  count: number;
-}
 interface ChartProps {
-  data: ChartDataPoint[];
+  data: FollowerHistoryPoint[];
   className?: string;
-  strokeColor?: string;
-  gradientColor?: string;
 }
 
-const Chart: React.FC<ChartProps> = ({ data, className, strokeColor = '#4ade80', gradientColor = '#4ade80' }) => {
-  if (!data || data.length < 2) {
+const Chart: React.FC<ChartProps> = ({ data, className }) => {
+  if (!data || data.length === 0) {
     return (
       <div className={`flex items-center justify-center h-48 bg-gray-900/50 rounded-lg text-gray-400 ${className}`}>
-        Not enough data for chart.
+        No data to display.
+      </div>
+    );
+  }
+  
+  if (data.length < 2) {
+    // Render a flat line if there's only one data point
+    const singleValue = data[0].count;
+     return (
+      <div className={`relative w-full h-48 bg-gray-900/50 p-2 rounded-lg ${className}`}>
+        <svg viewBox="0 0 500 150" className="w-full h-full" preserveAspectRatio="none">
+           <line x1="10" y1="75" x2="490" y2="75" stroke="#4ade80" strokeWidth="3" strokeLinecap="round" />
+        </svg>
+         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xs text-gray-400">
+             Tracking started...
+         </div>
       </div>
     );
   }
 
-  // Use a unique ID for the gradient per chart instance to avoid color conflicts
-  const gradientId = useMemo(() => `gradient-${Math.random().toString(36).substring(2, 9)}`, []);
-  const filterId = useMemo(() => `glow-${Math.random().toString(36).substring(2, 9)}`, []);
+  const isGrowth = data[data.length - 1].count >= data[0].count;
+  const strokeColor = isGrowth ? '#4ade80' : '#f87171';
+  const gradientColor = isGrowth ? '#4ade80' : '#f87171';
+  
+  const gradientId = useMemo(() => `chart-gradient-${Math.random().toString(36).substring(2, 9)}`, []);
+  const filterId = useMemo(() => `chart-glow-${Math.random().toString(36).substring(2, 9)}`, []);
 
   const chartWidth = 500;
   const chartHeight = 150;
