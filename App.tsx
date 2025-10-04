@@ -8,7 +8,8 @@ import {
   UserData,
   NetWorthHistoryPoint,
   MarketMover,
-  MostTraded
+  MostTraded,
+  FollowerHistoryPoint,
 } from './types';
 import {
   DAYS_PER_TICK,
